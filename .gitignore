@@ -1,0 +1,40 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Ralph Loop 執行時生成的檔案
+logs/
+.ralph_state.json
+.ralph_session
+.ralph_session_history
+.exit_signals
+
+# 依賴項
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 臨時檔案
+*.tmp
+*.temp
