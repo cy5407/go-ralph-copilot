@@ -67,6 +67,8 @@ type ClientConfig struct {
 
 	// 其他
 	EnablePersistence bool // 是否啟用持久化 (預設: true)
+	EnableSDK         bool // 是否啟用 SDK 執行器 (預設: true)
+	PreferSDK         bool // 是否優先使用 SDK (預設: true)
 }
 
 // NewRalphLoopClient 建立新的 Ralph Loop 客戶端
@@ -130,7 +132,7 @@ func NewRalphLoopClientWithConfig(config *ClientConfig) *RalphLoopClient {
 // DefaultClientConfig 傳回預設的配置
 func DefaultClientConfig() *ClientConfig {
 	return &ClientConfig{
-		CLITimeout:              30 * time.Second,
+		CLITimeout:              60 * time.Second, // 增加到 60 秒以支援複雜任務
 		CLIMaxRetries:           3,
 		MaxHistorySize:          100,
 		SaveDir:                 ".ralph-loop/saves",
@@ -140,6 +142,8 @@ func DefaultClientConfig() *ClientConfig {
 		Model:                   "claude-sonnet-4.5",
 		Silent:                  false,
 		EnablePersistence:       true,
+		EnableSDK:               true, // 預設啟用 SDK（主要執行方式）
+		PreferSDK:               true, // 預設優先使用 SDK
 	}
 }
 
@@ -187,37 +191,59 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 		}
 	}()
 
-	// 執行 CLI 命令
-	result, err := c.executor.SuggestShellCommand(ctx, prompt)
-	if err != nil {
-		c.breaker.RecordSameError(err.Error())
-		execCtx.ExitReason = fmt.Sprintf("CLI execution failed: %v", err)
-		return c.createResult(execCtx, false), nil
+	// 根據配置決定執行順序：優先使用 SDK 或 CLI
+	var output string
+	var executionErr error
+	var usedSDK bool
+
+	// 如果配置優先使用 SDK，則先嘗試 SDK
+	if c.config.PreferSDK && c.config.EnableSDK && c.sdkExecutor != nil && c.sdkExecutor.isHealthy() {
+		output, executionErr = c.sdkExecutor.Complete(ctx, prompt)
+		if executionErr == nil {
+			usedSDK = true
+			execCtx.CLICommand = "sdk:complete"
+			execCtx.CLIOutput = output
+			execCtx.CLIExitCode = 0
+		}
 	}
 
-	// 記錄執行結果
-	execCtx.CLICommand = result.Command
-	execCtx.CLIOutput = result.Stdout
-	execCtx.CLIExitCode = result.ExitCode
+	// SDK 失敗/不可用/未啟用，或配置不優先使用 SDK 時，使用 CLI
+	if !usedSDK {
+		result, err := c.executor.ExecutePrompt(ctx, prompt)
+		if err != nil {
+			c.breaker.RecordSameError(err.Error())
+			if executionErr != nil {
+				execCtx.ExitReason = fmt.Sprintf("執行失敗 (SDK: %v, CLI: %v)", executionErr, err)
+			} else {
+				execCtx.ExitReason = fmt.Sprintf("CLI 執行失敗: %v", err)
+			}
+			return c.createResult(execCtx, false), nil
+		}
 
-	if result.ExitCode != 0 {
-		c.breaker.RecordSameError(fmt.Sprintf("exit code %d", result.ExitCode))
-		execCtx.ExitReason = fmt.Sprintf("CLI failed with exit code %d", result.ExitCode)
-		execCtx.ShouldContinue = false
-		return c.createResult(execCtx, false), nil
+		output = result.Stdout
+		execCtx.CLICommand = result.Command
+		execCtx.CLIOutput = result.Stdout
+		execCtx.CLIExitCode = result.ExitCode
+
+		if result.ExitCode != 0 {
+			c.breaker.RecordSameError(fmt.Sprintf("exit code %d", result.ExitCode))
+			execCtx.ExitReason = fmt.Sprintf("CLI 執行失敗，退出碼 %d", result.ExitCode)
+			execCtx.ShouldContinue = false
+			return c.createResult(execCtx, false), nil
+		}
 	}
 
 	// 解析輸出
-	parser := NewOutputParser(result.Stdout)
+	parser := NewOutputParser(output)
 	parser.Parse()
 	codeBlocks := parser.GetOptions() // 臨時使用，實際應有完整解析
 
 	execCtx.ParsedCodeBlocks = codeBlocks
-	execCtx.CleanedOutput = result.Stdout
+	execCtx.CleanedOutput = output
 
 	// 分析回應（簡化版本，實際應使用完整分析器）
 	// 如果輸出包含完成關鍵字，則視為完成
-	shouldContinue := !strings.Contains(result.Stdout, "完成") && !strings.Contains(result.Stdout, "done")
+	shouldContinue := !strings.Contains(output, "完成") && !strings.Contains(output, "done")
 
 	execCtx.ShouldContinue = shouldContinue
 	if !shouldContinue {
@@ -254,12 +280,29 @@ func (c *RalphLoopClient) ExecuteUntilCompletion(ctx context.Context, initialPro
 		default:
 		}
 
+		// 顯示進度
+		if !c.config.Silent {
+			fmt.Printf("\n🔄 迴圈 %d/%d - 正在執行...\n", i+1, maxLoops)
+		}
+
 		result, err := c.ExecuteLoop(ctx, initialPrompt)
 		if err != nil {
+			if !c.config.Silent {
+				fmt.Printf("❌ 迴圈 %d 失敗: %v\n", i+1, err)
+			}
 			return results, err
 		}
 
 		results = append(results, result)
+
+		// 顯示迴圈結果
+		if !c.config.Silent {
+			if result.ShouldContinue {
+				fmt.Printf("✓ 迴圈 %d 完成 - 繼續下一個迴圈\n", i+1)
+			} else {
+				fmt.Printf("✓ 迴圈 %d 完成 - 任務完成: %s\n", i+1, result.ExitReason)
+			}
+		}
 
 		// 檢查是否完成
 		if !result.ShouldContinue {

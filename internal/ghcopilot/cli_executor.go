@@ -83,7 +83,7 @@ type CLIExecutor struct {
 // NewCLIExecutor 建立新的 CLI 執行器
 func NewCLIExecutor(workDir string) *CLIExecutor {
 	return &CLIExecutor{
-		timeout:          30 * time.Second,
+		timeout:          60 * time.Second, // 增加到 60 秒以支援複雜任務
 		workDir:          workDir,
 		maxRetries:       3,
 		retryDelay:       1 * time.Second,
@@ -96,7 +96,7 @@ func NewCLIExecutor(workDir string) *CLIExecutor {
 // NewCLIExecutorWithOptions 建立帶選項的 CLI 執行器
 func NewCLIExecutorWithOptions(workDir string, options ExecutorOptions) *CLIExecutor {
 	return &CLIExecutor{
-		timeout:          30 * time.Second,
+		timeout:          60 * time.Second, // 增加到 60 秒以支援複雜任務
 		workDir:          workDir,
 		maxRetries:       3,
 		retryDelay:       1 * time.Second,
@@ -343,11 +343,18 @@ func (ce *CLIExecutor) executeWithRetry(ctx context.Context, args []string) (*Ex
 	var lastErr error
 	var result *ExecutionResult
 
+	debugLog("重試設定: 最大重試 %d 次, 延遲倍數 %v", ce.maxRetries, ce.retryDelay)
+
 	for attempt := 0; attempt <= ce.maxRetries; attempt++ {
 		if attempt > 0 {
+			retryDelay := ce.retryDelay * time.Duration(attempt)
+			infoLog("🔄 第 %d/%d 次重試，等待 %v...", attempt, ce.maxRetries, retryDelay)
+			debugLog("重試原因: %v", lastErr)
+
 			select {
-			case <-time.After(ce.retryDelay * time.Duration(attempt)):
+			case <-time.After(retryDelay):
 			case <-ctx.Done():
+				debugLog("上下文已取消，停止重試")
 				return nil, ctx.Err()
 			}
 		}
@@ -355,6 +362,9 @@ func (ce *CLIExecutor) executeWithRetry(ctx context.Context, args []string) (*Ex
 		result, err := ce.execute(ctx, args)
 
 		if err == nil && result.Success {
+			if attempt > 0 {
+				infoLog("✅ 重試成功！")
+			}
 			return result, nil
 		}
 
@@ -363,8 +373,11 @@ func (ce *CLIExecutor) executeWithRetry(ctx context.Context, args []string) (*Ex
 
 		// 如果達到最大重試次數，返回結果
 		if attempt == ce.maxRetries {
+			infoLog("❌ 已達最大重試次數 (%d), 放棄執行", ce.maxRetries)
 			return result, lastErr
 		}
+
+		debugLog("執行失敗，準備重試...")
 	}
 
 	return result, lastErr
@@ -382,19 +395,62 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 	cmd := exec.CommandContext(execCtx, "copilot", args...)
 	cmd.Dir = ce.workDir
 
-	// 設定環境變數
-	cmd.Env = append(os.Environ(),
+	// 設定環境變數 - 強制非交互式模式
+	envVars := []string{
 		fmt.Sprintf("REQUEST_ID=%s", ce.requestID),
-	)
+		"COPILOT_NONINTERACTIVE=1",           // 防止交互式提示
+		"GITHUB_COPILOT_CLI_SKIP_PROMPTS=1", // 跳過所有提示
+	}
+
+	// 如果啟用除錯模式，添加 copilot 除錯環境變數
+	if os.Getenv("RALPH_DEBUG") == "1" {
+		envVars = append(envVars,
+			"COPILOT_DEBUG=1",
+			"COPILOT_LOG_LEVEL=debug",
+		)
+	}
+
+	cmd.Env = append(os.Environ(), envVars...)
 
 	// 捕獲輸出
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	cmd.Stdin = nil // 明確設定沒有輸入，防止卡在等待輸入
+
+	// 執行前日誌
+	debugLog("========================================")
+	debugLog("開始執行 Copilot CLI")
+	debugLog("工作目錄: %s", ce.workDir)
+	debugLog("超時設定: %v", ce.timeout)
+	debugLog("Request ID: %s", ce.requestID)
+	debugLog("模型: %s", ce.options.Model)
+
+	// 顯示命令參數（隱藏過長的 prompt）
+	cmdStr := "copilot"
+	for i, arg := range args {
+		if i > 0 && args[i-1] == "-p" && len(arg) > 100 {
+			cmdStr += fmt.Sprintf(" %s \"%.100s...\"", args[i-1], arg)
+			i++ // 跳過下一個參數
+		} else if arg != "-p" && i > 0 && args[i-1] != "-p" {
+			cmdStr += " " + arg
+		}
+	}
+	debugLog("指令: %s", cmdStr)
+	debugLog("環境變數: %v", envVars)
+	debugLog("----------------------------------------")
+
+	infoLog("⏳ 執行 Copilot CLI (超時: %v)...", ce.timeout)
 
 	// 執行指令
 	err := cmd.Run()
 	executionTime := time.Since(start)
+
+	// 檢查是否超時
+	if execCtx.Err() == context.DeadlineExceeded {
+		debugLog("⚠️  執行超時！已達到 %v 的限制", ce.timeout)
+		infoLog("⚠️  執行超時 - 可能需要增加超時設定或檢查 Copilot CLI 狀態")
+	}
 
 	result := &ExecutionResult{
 		Command:       fmt.Sprintf("copilot %s", strings.Join(args, " ")),
@@ -410,6 +466,31 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		result.ExitCode = exitErr.ExitCode()
 	}
+
+	// 執行後日誌
+	debugLog("----------------------------------------")
+	debugLog("執行完成")
+	debugLog("執行時間: %v", executionTime)
+	debugLog("成功: %v", result.Success)
+	debugLog("退出碼: %d", result.ExitCode)
+	debugLog("Stdout 長度: %d bytes", len(result.Stdout))
+	debugLog("Stderr 長度: %d bytes", len(result.Stderr))
+
+	if result.Success {
+		infoLog("✅ 執行成功 (耗時: %v)", executionTime)
+	} else {
+		infoLog("❌ 執行失敗 (耗時: %v, 退出碼: %d)", executionTime, result.ExitCode)
+		if len(result.Stderr) > 0 {
+			debugLog("錯誤輸出: %s", truncateString(result.Stderr, 500))
+		}
+	}
+
+	// 顯示輸出摘要
+	if len(result.Stdout) > 0 {
+		debugLog("輸出摘要: %s", truncateString(result.Stdout, 200))
+	}
+
+	debugLog("========================================")
 
 	return result, nil
 }
@@ -504,6 +585,24 @@ func (ce *CLIExecutor) generateMockResponse(command string, args []string) strin
 // generateRequestID 產生唯一的請求 ID
 func generateRequestID() string {
 	return fmt.Sprintf("copilot-req-%d", time.Now().UnixNano())
+}
+
+// debugLog 輸出除錯日誌（僅在 RALPH_DEBUG=1 時）
+func debugLog(format string, args ...interface{}) {
+	if os.Getenv("RALPH_DEBUG") == "1" {
+		timestamp := time.Now().Format("15:04:05.000")
+		fmt.Printf("[DEBUG %s] ", timestamp)
+		fmt.Printf(format, args...)
+		fmt.Println()
+	}
+}
+
+// infoLog 輸出資訊日誌（總是顯示）
+func infoLog(format string, args ...interface{}) {
+	timestamp := time.Now().Format("15:04:05.000")
+	fmt.Printf("[INFO %s] ", timestamp)
+	fmt.Printf(format, args...)
+	fmt.Println()
 }
 
 // GetWorkDir 取得工作目錄

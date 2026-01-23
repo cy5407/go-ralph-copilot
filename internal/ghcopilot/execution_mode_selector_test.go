@@ -704,11 +704,13 @@ func TestHybridExecutor_Integration(t *testing.T) {
 	sdkIndex := 0
 
 	executor.SetCLIExecutor(func(ctx context.Context, prompt string) (string, error) {
+		time.Sleep(1 * time.Millisecond) // 添加小延遲以確保記錄時間
 		result := cliResults[cliIndex%len(cliResults)]
 		cliIndex++
 		return result, nil
 	})
 	executor.SetSDKExecutor(func(ctx context.Context, prompt string) (string, error) {
+		time.Sleep(1 * time.Millisecond) // 添加小延遲以確保記錄時間
 		result := sdkResults[sdkIndex%len(sdkResults)]
 		sdkIndex++
 		return result, nil

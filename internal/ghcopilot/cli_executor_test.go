@@ -14,8 +14,8 @@ func TestNewCLIExecutor(t *testing.T) {
 	if ce == nil {
 		t.Error("NewCLIExecutor() 傳回 nil")
 	}
-	if ce.timeout != 30*time.Second {
-		t.Errorf("預設逾時應為 30s，但為 %v", ce.timeout)
+	if ce.timeout != 60*time.Second {
+		t.Errorf("預設逾時應為 60s，但為 %v", ce.timeout)
 	}
 	if ce.workDir != "/tmp" {
 		t.Errorf("工作目錄應為 /tmp，但為 %s", ce.workDir)
