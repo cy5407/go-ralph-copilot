@@ -48,3 +48,14 @@ Thumbs.db
 .response_analysis
 progress.json
 status.json
+
+# Ralph Loop 執行記錄與快照
+.ralph-loop/
+*/.ralph-loop/
+
+# Claude AI 本地配置
+.claude/
+
+# 測試臨時目錄
+test-multiloop/
+test-multiloop.md
