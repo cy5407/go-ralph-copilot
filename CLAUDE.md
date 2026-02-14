@@ -75,13 +75,21 @@ COPILOT_MOCK_MODE=true ./ralph-loop.exe run -prompt "測試" -max-loops 3
 ├─ CLIExecutor → 呼叫 `copilot -p "prompt"`
 │   └─ 重試機制（最多 3 次）
 │   └─ 超時控制（預設 60 秒）
+│   └─ 串流輸出 + Promise Detection
+│
+├─ PromiseDetector → 完成偵測（主要）
+│   └─ 在串流中即時偵測 <promise>...</promise> 標籤
+│   └─ 參考 doggy8088/copilot-ralph 的設計
+│
+├─ SystemPrompt → 注入系統指令
+│   └─ 約束 AI 在完成時輸出特定標籤
 │
 ├─ OutputParser → 解析 Copilot 輸出
 │   └─ 提取程式碼區塊
 │   └─ 提取結構化狀態
 │
-├─ ResponseAnalyzer → 分析回應
-│   └─ 完成偵測（尋找 "✅", "完成" 等關鍵字）
+├─ ResponseAnalyzer → 分析回應（備用）
+│   └─ 關鍵字評分（完成偵測回退機制）
 │   └─ 卡住偵測（輸出無變化）
 │
 ├─ CircuitBreaker → 熔斷保護
@@ -101,12 +109,14 @@ COPILOT_MOCK_MODE=true ./ralph-loop.exe run -prompt "測試" -max-loops 3
 
 - `client.go` - **主要 API 入口點**，`RalphLoopClient` 整合所有模組
 - `cli_executor.go` - 執行 `copilot` CLI 命令，處理超時與重試
+- `promise_detection.go` - **Promise Detection 完成偵測**（參考 doggy8088/copilot-ralph）
+- `system_prompt.go` - **System Prompt 構建**，約束 AI 輸出完成標籤
 - `output_parser.go` - 解析 Copilot 輸出（程式碼區塊、選項）
-- `response_analyzer.go` - 判斷是否應繼續或退出迴圈
+- `response_analyzer.go` - 判斷是否應繼續或退出迴圈（備用回退機制）
 - `circuit_breaker.go` - 防止無限迴圈的安全機制
 - `context.go` - 管理迴圈歷史與上下文累積
 - `persistence.go` - 儲存/載入執行記錄
-- `exit_detector.go` - 優雅退出決策（雙重條件驗證）
+- `exit_detector.go` - 優雅退出決策（測試飽和、速率限制等）
 - `sdk_executor.go` - GitHub Copilot SDK 整合（備用執行器）
 
 **`cmd/ralph-loop/main.go`** - CLI 入口
@@ -126,6 +136,8 @@ config.SameErrorThreshold = 5             // 相同錯誤次數觸發熔斷
 config.Model = "claude-sonnet-4.5"        // AI 模型
 config.WorkDir = "."                      // 工作目錄
 config.SaveDir = ".ralph-loop/saves"      // 歷史儲存位置
+config.PromisePhrase = "任務完成！🥇"      // Promise Detection 承諾詞
+config.EnablePromiseDetect = true          // 啟用 Promise Detection
 ```
 
 ### 執行器選項
@@ -140,12 +152,23 @@ opts.NoAskUser = true           // 自主模式（不詢問使用者）
 
 ## 完成檢測機制
 
-系統透過以下方式判斷任務是否完成：
+系統透過以下方式判斷任務是否完成（優先順序從高到低）：
 
-1. **關鍵字檢測** - 輸出包含 "完成", "成功", "✅", "PASS" 等
-2. **退出信號** - 結構化狀態中 `EXIT_SIGNAL: true`
-3. **任務進度** - `TASKS_DONE: X/X` 且 X 相同
-4. **熔斷器** - 無進展或重複錯誤達閾值
+1. **Promise Detection**（主要，參考 [doggy8088/copilot-ralph](https://github.com/doggy8088/copilot-ralph)）
+   - 在 prompt 前注入 System Prompt，約束 AI 在完成時輸出 `<promise>任務完成！🥇</promise>`
+   - 程式端在串流輸出中即時偵測此標籤
+   - 偵測到即判定完成，不依賴自然語言輸出格式
+   - 相關檔案：`promise_detection.go`, `system_prompt.go`
+
+2. **雙重條件驗證**（備用回退）
+   - 關鍵字檢測：輸出包含 "完成", "成功", "done" 等
+   - 退出信號：結構化狀態中 `EXIT_SIGNAL: true`
+   - 需同時滿足兩個條件才觸發
+
+3. **安全退出條件**
+   - 測試飽和：連續 3+ 個測試迴圈
+   - 速率限制：達到 API 限制
+   - 熔斷器：無進展或重複錯誤達閾值
 
 ## 常見問題處理
 
