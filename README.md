@@ -1,6 +1,28 @@
 # Ralph Loop - AI 驅動的自動程式碼迭代系統
 
+[![Version](https://img.shields.io/badge/version-0.1.0--stable-green.svg)](https://github.com/cy5407/go-ralph-copilot/releases/tag/v0.1.0-stable)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://go.dev/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 > 基於 GitHub Copilot SDK 的自主程式碼修正與迭代工具 (這是我用Vibe coding 出來的AI小垃圾)
+
+## 📦 穩定版本
+
+**當前穩定版本**: `v0.1.0-stable` ([Release Notes](https://github.com/cy5407/go-ralph-copilot/releases/tag/v0.1.0-stable))
+
+此版本已驗證可正常運作，包含：
+- ✅ AI 正常執行任務（無無限循環）
+- ✅ Copilot 輸出完整顯示
+- ✅ 完成檢測機制有效
+- ✅ 版本變數符合 ldflags 注入需求
+
+安裝穩定版本：
+```bash
+git clone https://github.com/cy5407/go-ralph-copilot.git
+cd go-ralph-copilot
+git checkout v0.1.0-stable
+go build -o ralph-loop.exe ./cmd/ralph-loop
+```
 
 ## 🎯 專案概述
 
@@ -67,12 +89,31 @@ Ralph Loop 是一個參考了Ralph-Loop，想拿來在Copilot上仿造的 AI 驅
 
 ### 安裝
 
+**方式 1：使用穩定版本（推薦）**
+
 ```bash
 # 克隆專案
-git clone https://github.com/cy540/ralph-loop.git
-cd ralph-loop
+git clone https://github.com/cy5407/go-ralph-copilot.git
+cd go-ralph-copilot
+
+# 切換到穩定版本
+git checkout v0.1.0-stable
 
 # 建置執行檔
+go build -o ralph-loop.exe ./cmd/ralph-loop
+
+# 驗證安裝
+.\ralph-loop.exe version
+```
+
+**方式 2：使用最新開發版**
+
+```bash
+# 克隆專案
+git clone https://github.com/cy5407/go-ralph-copilot.git
+cd go-ralph-copilot
+
+# 使用 master 分支（包含最新功能，可能不穩定）
 go build -o ralph-loop.exe ./cmd/ralph-loop
 ```
 
@@ -288,12 +329,35 @@ MIT License
 
 ## 📞 聯繫
 
-- GitHub Issues: [問題追蹤](https://github.com/cy540/ralph-loop/issues)
-- 專案維護者: cy540
+- GitHub Issues: [問題追蹤](https://github.com/cy5407/go-ralph-copilot/issues)
+- 專案維護者: [@cy5407](https://github.com/cy5407)
+
+## 📜 版本歷史
+
+### v0.1.0-stable (2026-02-14) 🎉
+
+**首個穩定版本發布**
+
+**新增功能**：
+- ✅ 修正 Version 變數為大寫（符合 ldflags 注入）
+- ✅ 新增 io.MultiWriter 讓 Copilot 輸出同時顯示到終端
+- ✅ 設定 Silent: false 啟用完整輸出顯示
+
+**驗證結果**：
+- AI 正常執行任務（無無限循環問題）
+- Copilot 輸出完整顯示（可觀察 AI 行為）
+- 完成檢測機制有效（單次迴圈完成任務）
+- 版本變數符合 ldflags 注入需求
+
+**已知限制**：
+- 基於舊版完成檢測機制（無 Promise Detection）
+- 無 System Prompt（依賴 `.github/copilot-instructions.md`）
+
+[查看完整 Release Notes](https://github.com/cy5407/go-ralph-copilot/releases/tag/v0.1.0-stable)
 
 ---
 
-**最後更新**: 2026-01-23
-**版本**: 1.0.0
-**狀態**: ✅ 生產就緒 (351 個測試通過，93% 覆蓋率)
+**最後更新**: 2026-02-14  
+**當前穩定版本**: v0.1.0-stable  
+**狀態**: ✅ 已驗證可用（AI 正常執行，輸出顯示完整）
 
