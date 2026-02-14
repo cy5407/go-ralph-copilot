@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cy540/ralph-loop/internal/ghcopilot"
+	"github.com/cy5407/go-ralph-copilot/internal/ghcopilot"
 )
 
 // TestIntegrationRalphLoopClient 集成測試：RalphLoopClient 完整流程

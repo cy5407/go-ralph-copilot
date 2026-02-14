@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cy540/ralph-loop/internal/ghcopilot"
+	"github.com/cy5407/go-ralph-copilot/internal/ghcopilot"
 )
 
 // BenchmarkRalphLoopExecution 基準測試：核心執行流程性能

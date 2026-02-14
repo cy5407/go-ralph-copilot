@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cy540/ralph-loop/internal/logger"
-	"github.com/cy540/ralph-loop/internal/metrics"
-	"github.com/cy540/ralph-loop/internal/security"
+	"github.com/cy5407/go-ralph-copilot/internal/logger"
+	"github.com/cy5407/go-ralph-copilot/internal/metrics"
+	"github.com/cy5407/go-ralph-copilot/internal/security"
 )
 
 // RalphLoopClient 是 Ralph Loop 系統的主要公開 API

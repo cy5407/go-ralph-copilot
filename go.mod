@@ -1,4 +1,4 @@
-module github.com/cy540/ralph-loop
+module github.com/cy5407/go-ralph-copilot
 
 go 1.24.0
 

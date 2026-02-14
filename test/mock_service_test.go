@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cy540/ralph-loop/internal/ghcopilot"
+	"github.com/cy5407/go-ralph-copilot/internal/ghcopilot"
 )
 
 // MockCopilotResponse 模擬 Copilot 回應結構

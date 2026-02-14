@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cy540/ralph-loop/internal/ghcopilot"
-	"github.com/cy540/ralph-loop/internal/metrics"
+	"github.com/cy5407/go-ralph-copilot/internal/ghcopilot"
+	"github.com/cy5407/go-ralph-copilot/internal/metrics"
 )
 
 var (
@@ -274,7 +274,7 @@ plugin 命令選項:
   - CLI 未安裝：winget install GitHub.Copilot
   - 認證失敗：copilot auth
 
-更多資訊請參考: https://github.com/cy540/ralph-loop
+更多資訊請參考: https://github.com/cy5407/go-ralph-copilot
 `, version)
 }
 
