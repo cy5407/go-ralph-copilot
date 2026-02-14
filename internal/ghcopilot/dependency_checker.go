@@ -123,22 +123,33 @@ func (dc *DependencyChecker) CheckGitHubCLI() {
 
 // CheckGitHubAuth 檢查 GitHub 認證狀態
 func (dc *DependencyChecker) CheckGitHubAuth() {
-	// 新版 CLI 使用自己的認證機制，先嘗試 gh auth，如失敗則提示使用 copilot /login
-	cmd := exec.Command("gh", "auth", "status")
+	// 測試 Copilot CLI 是否能實際執行（這比檢查 gh auth 更可靠）
+	cmd := exec.Command("copilot", "-p", "test", "--model", "claude-haiku-4.5", "--silent")
 	_, err := cmd.CombinedOutput()
+	
+	// 如果命令失敗且不是「找不到命令」錯誤，可能是認證問題
 	if err != nil {
-		// gh 認證失敗不一定是問題，因為新版 CLI 有自己的認證
-		// 這裡只是警告，不阻止執行
+		if strings.Contains(err.Error(), "executable file not found") {
+			// 這種情況已經在 CheckGitHubCopilotCLI() 中處理了
+			return
+		}
+		
+		// 其他錯誤可能是認證問題，但不一定阻止執行
+		// 某些情況下 Copilot 可能因為其他原因失敗（如網路問題）
+		// 所以這裡改為警告而不是錯誤
 		dc.errors = append(dc.errors, &DependencyError{
 			Component: "GitHub Auth",
-			Message:   "GitHub CLI 未認證（新版 Copilot CLI 可使用自己的認證）",
-			Help: `認證方式：
+			Message:   "無法驗證 Copilot CLI 認證狀態",
+			Help: `如果遇到認證問題，請嘗試：
 
-   方法 1: 使用新版 Copilot CLI 認證（推薦）
+   方法 1: 使用 Copilot CLI 認證（推薦）
       執行 'copilot' 然後輸入 '/login'
 
    方法 2: 使用 GitHub CLI 認證
-      執行 'gh auth login -w'（使用瀏覽器認證）`,
+      執行 'gh auth login -w'（使用瀏覽器認證）
+      
+   方法 3: 直接測試
+      執行 'copilot -p "hello" --silent' 看是否正常工作`,
 		})
 	}
 }

@@ -25,9 +25,10 @@ type ExecutionContext struct {
 	CLIExitCode int    `json:"cli_exit_code"` // 退出碼
 
 	// 輸出解析結果
-	ParsedCodeBlocks []string `json:"parsed_code_blocks"` // 提取的程式碼區塊
-	ParsedOptions    []string `json:"parsed_options"`     // 提取的選項
-	CleanedOutput    string   `json:"cleaned_output"`     // 清除 Markdown 後的輸出
+	ParsedCodeBlocks     []string `json:"parsed_code_blocks"`     // 提取的程式碼區塊
+	ExtractedCodeBlocks  []string `json:"extracted_code_blocks"`  // 完整提取的程式碼區塊
+	ParsedOptions        []string `json:"parsed_options"`         // 提取的選項
+	CleanedOutput        string   `json:"cleaned_output"`         // 清除 Markdown 後的輸出
 
 	// 回應分析
 	CompletionScore      int         `json:"completion_score"`      // 完成分數

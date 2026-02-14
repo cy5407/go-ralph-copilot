@@ -1,0 +1,74 @@
+name: 依賴更新檢查
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'  # 每週一午夜執行
+  workflow_dispatch:  # 允許手動觸發
+
+jobs:
+  update-dependencies:
+    name: 檢查並更新依賴
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout 程式碼
+      uses: actions/checkout@v4
+
+    - name: 設定 Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: 檢查可更新的依賴
+      run: |
+        echo "## 目前依賴狀況" > dependency-report.md
+        go list -u -m all >> dependency-report.md
+        
+    - name: 更新依賴
+      run: |
+        go get -u ./...
+        go mod tidy
+
+    - name: 執行測試
+      run: go test ./...
+
+    - name: 檢查是否有變更
+      id: changes
+      run: |
+        if git diff --quiet go.mod go.sum; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+        else
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: 創建 Pull Request
+      if: steps.changes.outputs.has_changes == 'true'
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "chore: 更新 Go 依賴"
+        title: "自動更新：Go 依賴套件"
+        body: |
+          ## 📦 依賴更新
+          
+          此 PR 由自動化工作流程建立，包含最新的 Go 依賴更新。
+          
+          ### 變更內容
+          - 更新所有可更新的依賴到最新版本
+          - 執行 `go mod tidy` 清理未使用的依賴
+          
+          ### 測試結果
+          ✅ 所有測試通過
+          
+          ### 審查要點
+          - 檢查是否有破壞性變更
+          - 確認測試覆蓋率未降低
+          - 驗證功能正常運作
+          
+          ---
+          🤖 自動生成於 ${{ github.run_number }}
+        branch: auto-update-dependencies
+        delete-branch: true
+        labels: |
+          dependencies
+          automated

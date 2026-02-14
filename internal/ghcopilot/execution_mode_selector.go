@@ -14,6 +14,8 @@ const (
 	ModeCLI ExecutionMode = iota
 	// ModeSDK 使用 SDK 執行（類型安全）
 	ModeSDK
+	// ModePlugin 使用插件執行（可擴展）
+	ModePlugin
 	// ModeAuto 自動選擇最佳模式
 	ModeAuto
 	// ModeHybrid 混合模式
@@ -27,6 +29,8 @@ func (m ExecutionMode) String() string {
 		return "cli"
 	case ModeSDK:
 		return "sdk"
+	case ModePlugin:
+		return "plugin"
 	case ModeAuto:
 		return "auto"
 	case ModeHybrid:
@@ -128,6 +132,8 @@ type ExecutionModeSelector struct {
 	fallbackEnabled  bool
 	sdkAvailable     bool
 	cliAvailable     bool
+	pluginAvailable  bool
+	preferredPlugin  string
 	metrics          *SelectorMetrics
 	rules            []SelectionRule
 	mu               sync.RWMutex
@@ -138,6 +144,7 @@ type SelectorMetrics struct {
 	TotalSelections   int64
 	CLISelections     int64
 	SDKSelections     int64
+	PluginSelections  int64
 	FallbackCount     int64
 	LastSelection     ExecutionMode
 	LastSelectionTime time.Time
@@ -220,6 +227,34 @@ func (s *ExecutionModeSelector) IsCLIAvailable() bool {
 	return s.cliAvailable
 }
 
+// SetPluginAvailable 設定插件是否可用
+func (s *ExecutionModeSelector) SetPluginAvailable(available bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pluginAvailable = available
+}
+
+// IsPluginAvailable 檢查插件是否可用
+func (s *ExecutionModeSelector) IsPluginAvailable() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.pluginAvailable
+}
+
+// SetPreferredPlugin 設定偏好的插件
+func (s *ExecutionModeSelector) SetPreferredPlugin(plugin string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.preferredPlugin = plugin
+}
+
+// GetPreferredPlugin 取得偏好的插件
+func (s *ExecutionModeSelector) GetPreferredPlugin() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.preferredPlugin
+}
+
 // AddRule 添加選擇規則
 func (s *ExecutionModeSelector) AddRule(rule SelectionRule) {
 	s.mu.Lock()
@@ -258,21 +293,28 @@ func (s *ExecutionModeSelector) Choose(task *Task) ExecutionMode {
 	fallbackEnabled := s.fallbackEnabled
 	sdkAvailable := s.sdkAvailable
 	cliAvailable := s.cliAvailable
+	pluginAvailable := s.pluginAvailable
+	preferredPlugin := s.preferredPlugin
 	s.mu.RUnlock()
 
-	// 記錄選擇
+	// 記錄選擇時間 (不在這裡增加 TotalSelections，由 recordSelection 負責)
 	defer func() {
 		s.metrics.mu.Lock()
-		s.metrics.TotalSelections++
 		s.metrics.LastSelectionTime = time.Now()
 		s.metrics.mu.Unlock()
 	}()
 
 	// 如果任務指定了偏好模式且不是自動模式
 	if task != nil && task.PreferredMode != ModeAuto {
-		mode := s.validateAndFallback(task.PreferredMode, sdkAvailable, cliAvailable, fallbackEnabled)
+		mode := s.validateAndFallback(task.PreferredMode, sdkAvailable, cliAvailable, pluginAvailable, fallbackEnabled)
 		s.recordSelection(mode)
 		return mode
+	}
+
+	// 如果有偏好插件且插件可用
+	if preferredPlugin != "" && pluginAvailable {
+		s.recordSelection(ModePlugin)
+		return ModePlugin
 	}
 
 	// 如果任務需要 SDK
@@ -291,7 +333,7 @@ func (s *ExecutionModeSelector) Choose(task *Task) ExecutionMode {
 	// 應用規則
 	for _, rule := range rules {
 		if task != nil && rule.Condition(task) {
-			mode := s.validateAndFallback(rule.Mode, sdkAvailable, cliAvailable, fallbackEnabled)
+			mode := s.validateAndFallback(rule.Mode, sdkAvailable, cliAvailable, pluginAvailable, fallbackEnabled)
 			s.recordSelection(mode)
 			return mode
 		}
@@ -302,12 +344,12 @@ func (s *ExecutionModeSelector) Choose(task *Task) ExecutionMode {
 		switch task.Complexity {
 		case ComplexitySimple:
 			// 簡單任務使用 CLI
-			mode := s.validateAndFallback(ModeCLI, sdkAvailable, cliAvailable, fallbackEnabled)
+			mode := s.validateAndFallback(ModeCLI, sdkAvailable, cliAvailable, pluginAvailable, fallbackEnabled)
 			s.recordSelection(mode)
 			return mode
 		case ComplexityComplex:
 			// 複雜任務使用 SDK
-			mode := s.validateAndFallback(ModeSDK, sdkAvailable, cliAvailable, fallbackEnabled)
+			mode := s.validateAndFallback(ModeSDK, sdkAvailable, cliAvailable, pluginAvailable, fallbackEnabled)
 			s.recordSelection(mode)
 			return mode
 		}
@@ -322,7 +364,7 @@ func (s *ExecutionModeSelector) Choose(task *Task) ExecutionMode {
 // validateAndFallback 驗證模式並在必要時進行故障轉移
 func (s *ExecutionModeSelector) validateAndFallback(
 	mode ExecutionMode,
-	sdkAvailable, cliAvailable, fallbackEnabled bool,
+	sdkAvailable, cliAvailable, pluginAvailable, fallbackEnabled bool,
 ) ExecutionMode {
 	switch mode {
 	case ModeSDK:
@@ -344,6 +386,21 @@ func (s *ExecutionModeSelector) validateAndFallback(
 			return ModeSDK
 		}
 		return ModeCLI
+
+	case ModePlugin:
+		if pluginAvailable {
+			return ModePlugin
+		}
+		// 插件不可用時優先降級到 SDK，再到 CLI
+		if fallbackEnabled && sdkAvailable {
+			s.recordFallback()
+			return ModeSDK
+		}
+		if fallbackEnabled && cliAvailable {
+			s.recordFallback()
+			return ModeCLI
+		}
+		return ModePlugin
 
 	case ModeHybrid:
 		// 混合模式優先使用 SDK
@@ -381,11 +438,14 @@ func (s *ExecutionModeSelector) recordSelection(mode ExecutionMode) {
 	defer s.metrics.mu.Unlock()
 
 	s.metrics.LastSelection = mode
+	s.metrics.TotalSelections++ // 增加總選擇計數
 	switch mode {
 	case ModeCLI:
 		s.metrics.CLISelections++
 	case ModeSDK:
 		s.metrics.SDKSelections++
+	case ModePlugin:
+		s.metrics.PluginSelections++
 	}
 }
 
@@ -405,6 +465,7 @@ func (s *ExecutionModeSelector) GetMetrics() *SelectorMetrics {
 		TotalSelections:   s.metrics.TotalSelections,
 		CLISelections:     s.metrics.CLISelections,
 		SDKSelections:     s.metrics.SDKSelections,
+		PluginSelections:  s.metrics.PluginSelections,
 		FallbackCount:     s.metrics.FallbackCount,
 		LastSelection:     s.metrics.LastSelection,
 		LastSelectionTime: s.metrics.LastSelectionTime,
@@ -419,6 +480,7 @@ func (s *ExecutionModeSelector) ResetMetrics() {
 	s.metrics.TotalSelections = 0
 	s.metrics.CLISelections = 0
 	s.metrics.SDKSelections = 0
+	s.metrics.PluginSelections = 0
 	s.metrics.FallbackCount = 0
 	s.metrics.LastSelection = 0
 	s.metrics.LastSelectionTime = time.Time{}

@@ -1,0 +1,40 @@
+name: "CodeQL 程式碼掃描"
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    - cron: '0 0 * * 1'  # 每週一午夜執行
+
+jobs:
+  analyze:
+    name: 分析程式碼
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'go' ]
+
+    steps:
+    - name: Checkout 程式碼
+      uses: actions/checkout@v4
+
+    - name: 初始化 CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: 自動建置
+      uses: github/codeql-action/autobuild@v3
+
+    - name: 執行 CodeQL 分析
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"

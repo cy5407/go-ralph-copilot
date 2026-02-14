@@ -96,7 +96,7 @@ func (e *SDKExecutor) Start(ctx context.Context) error {
 	}
 
 	// 啟動客戶端
-	if err := e.client.Start(); err != nil {
+	if err := e.client.Start(ctx); err != nil {
 		e.lastError = fmt.Errorf("failed to start copilot client: %w", err)
 		return e.lastError
 	}
@@ -122,9 +122,8 @@ func (e *SDKExecutor) Stop(ctx context.Context) error {
 
 	// 停止客戶端
 	if e.client != nil {
-		errs := e.client.Stop()
-		if len(errs) > 0 {
-			e.lastError = fmt.Errorf("errors during client stop: %v", errs)
+		if err := e.client.Stop(); err != nil {
+			e.lastError = fmt.Errorf("error during client stop: %w", err)
 		}
 	}
 
@@ -134,74 +133,106 @@ func (e *SDKExecutor) Stop(ctx context.Context) error {
 
 // Complete 執行代碼完成
 func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, error) {
-	if !e.isHealthy() {
-		return "", fmt.Errorf("sdk executor not healthy")
-	}
-
 	startTime := time.Now()
 	e.metrics.TotalCalls++
 
-	// 執行完成 (這裡使用模擬，因為實際 SDK 方法可能不同)
-	result := fmt.Sprintf("Completion for: %s", prompt)
+	if !e.isHealthy() {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("sdk executor not healthy")
+	}
+
+	// 使用通用會話處理
+	result, err := e.executeWithSession(ctx, prompt)
+	
 	duration := time.Since(startTime)
+	if err != nil {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("completion failed: %w", err)
+	}
 
 	e.metrics.SuccessfulCalls++
 	e.metrics.TotalDuration += duration
-
 	return result, nil
 }
 
 // Explain 執行代碼解釋
 func (e *SDKExecutor) Explain(ctx context.Context, code string) (string, error) {
-	if !e.isHealthy() {
-		return "", fmt.Errorf("sdk executor not healthy")
-	}
-
 	startTime := time.Now()
 	e.metrics.TotalCalls++
 
-	result := fmt.Sprintf("Explanation for: %s", code)
+	if !e.isHealthy() {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("sdk executor not healthy")
+	}
+
+	// 構建解釋 prompt
+	prompt := fmt.Sprintf("請解釋以下代碼的功能和工作原理：\n\n```\n%s\n```", code)
+
+	// 使用通用會話處理
+	result, err := e.executeWithSession(ctx, prompt)
+	
 	duration := time.Since(startTime)
+	if err != nil {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("explanation failed: %w", err)
+	}
 
 	e.metrics.SuccessfulCalls++
 	e.metrics.TotalDuration += duration
-
 	return result, nil
 }
 
 // GenerateTests 生成測試代碼
 func (e *SDKExecutor) GenerateTests(ctx context.Context, code string) (string, error) {
-	if !e.isHealthy() {
-		return "", fmt.Errorf("sdk executor not healthy")
-	}
-
 	startTime := time.Now()
 	e.metrics.TotalCalls++
 
-	result := fmt.Sprintf("Generated tests for: %s", code)
+	if !e.isHealthy() {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("sdk executor not healthy")
+	}
+
+	// 構建測試生成 prompt
+	prompt := fmt.Sprintf("為以下代碼生成完整的單元測試，包含邊界條件和錯誤處理測試：\n\n```\n%s\n```\n\n請使用適當的測試框架並包含測試說明。", code)
+
+	// 使用通用會話處理
+	result, err := e.executeWithSession(ctx, prompt)
+	
 	duration := time.Since(startTime)
+	if err != nil {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("test generation failed: %w", err)
+	}
 
 	e.metrics.SuccessfulCalls++
 	e.metrics.TotalDuration += duration
-
 	return result, nil
 }
 
 // CodeReview 執行代碼審查
 func (e *SDKExecutor) CodeReview(ctx context.Context, code string) (string, error) {
-	if !e.isHealthy() {
-		return "", fmt.Errorf("sdk executor not healthy")
-	}
-
 	startTime := time.Now()
 	e.metrics.TotalCalls++
 
-	result := fmt.Sprintf("Review for: %s", code)
+	if !e.isHealthy() {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("sdk executor not healthy")
+	}
+
+	// 構建代碼審查 prompt
+	prompt := fmt.Sprintf("請審查以下代碼，指出潛在的問題、改進建議和最佳實踐：\n\n```\n%s\n```\n\n請重點關注：\n1. 安全性問題\n2. 性能問題\n3. 代碼品質\n4. 錯誤處理\n5. 可讀性和維護性", code)
+
+	// 使用通用會話處理
+	result, err := e.executeWithSession(ctx, prompt)
+	
 	duration := time.Since(startTime)
+	if err != nil {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("code review failed: %w", err)
+	}
 
 	e.metrics.SuccessfulCalls++
 	e.metrics.TotalDuration += duration
-
 	return result, nil
 }
 
@@ -300,15 +331,100 @@ func (e *SDKExecutor) Close() error {
 
 	// 停止客戶端
 	if e.client != nil && e.running {
-		errs := e.client.Stop()
-		if len(errs) > 0 {
-			e.lastError = fmt.Errorf("errors during close: %v", errs)
+		if err := e.client.Stop(); err != nil {
+			e.lastError = fmt.Errorf("error during close: %w", err)
 		}
 	}
 
 	e.running = false
 	e.closed = true
 	return nil
+}
+
+// executeWithSession 使用會話執行 prompt 的通用方法
+func (e *SDKExecutor) executeWithSession(ctx context.Context, prompt string) (string, error) {
+	// 檢查 client 是否有效
+	if e.client == nil {
+		return "", fmt.Errorf("sdk client not initialized")
+	}
+
+	var lastErr error
+	maxRetries := e.config.MaxRetries
+	if maxRetries == 0 {
+		maxRetries = 3
+	}
+
+	for retry := 0; retry < maxRetries; retry++ {
+		// 創建會話配置
+		sessionConfig := &copilot.SessionConfig{
+			Model: "claude-sonnet-4.5",
+		}
+
+		// 創建會話
+		session, err := e.client.CreateSession(ctx, sessionConfig)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to create session (attempt %d/%d): %w", retry+1, maxRetries, err)
+			if retry < maxRetries-1 {
+				// 等待一段時間後重試
+				time.Sleep(time.Duration(retry+1) * time.Second)
+				continue
+			}
+			return "", lastErr
+		}
+
+		// 設定超時
+		timeout := e.config.Timeout
+		if timeout == 0 {
+			timeout = 30 * time.Second
+		}
+
+		// 發送請求並等待回應，使用帶 timeout 的 context
+		sendCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		
+		event, err := session.SendAndWait(sendCtx, copilot.MessageOptions{
+			Prompt: prompt,
+		})
+
+		// 清理會話
+		if destroyErr := session.Destroy(); destroyErr != nil {
+			// 記錄錯誤但不影響主要邏輯
+		}
+
+		if err != nil {
+			lastErr = fmt.Errorf("failed to get response (attempt %d/%d): %w", retry+1, maxRetries, err)
+			if retry < maxRetries-1 {
+				time.Sleep(time.Duration(retry+1) * time.Second)
+				continue
+			}
+			return "", lastErr
+		}
+
+		// 檢查回應
+		if event == nil {
+			lastErr = fmt.Errorf("empty event from session (attempt %d/%d)", retry+1, maxRetries)
+			if retry < maxRetries-1 {
+				time.Sleep(time.Duration(retry+1) * time.Second)
+				continue
+			}
+			return "", lastErr
+		}
+
+		// 檢查內容
+		if event.Data.Content == nil {
+			lastErr = fmt.Errorf("empty content from session (attempt %d/%d)", retry+1, maxRetries)
+			if retry < maxRetries-1 {
+				time.Sleep(time.Duration(retry+1) * time.Second)
+				continue
+			}
+			return "", lastErr
+		}
+
+		// 成功
+		return *event.Data.Content, nil
+	}
+
+	return "", lastErr
 }
 
 // isHealthy 檢查執行器是否健康

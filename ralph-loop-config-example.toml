@@ -1,0 +1,144 @@
+# Ralph Loop 配置文件範例
+
+# 這是一個完整的 Ralph Loop 配置文件範例，包含所有可用的設定選項
+# 您可以複製此文件並根據需要修改各項設定
+
+# =====================================
+# CLI 執行相關配置
+# =====================================
+[cli]
+# CLI 執行超時時間，支援格式：30s, 2m, 1h
+timeout = "60s"
+
+# 失敗時的最大重試次數 (0-10)
+max_retries = 3
+
+# 工作目錄，空白表示當前目錄
+work_dir = ""
+
+# =====================================
+# 上下文與歷史管理配置
+# =====================================
+[context]
+# 最大歷史記錄數量 (1-1000)
+max_history_size = 100
+
+# 歷史記錄儲存目錄
+save_dir = ".ralph-loop/saves"
+
+# 是否啟用持久化儲存
+enable_persistence = true
+
+# 是否使用 Gob 二進制格式 (false = JSON 格式)
+use_gob_format = false
+
+# =====================================
+# 熔斷器配置
+# =====================================
+[circuit_breaker]
+# 無進展迴圈次數閾值，超過此值觸發熔斷器 (1-50)
+threshold = 3
+
+# 相同錯誤出現次數閾值 (1-100)
+same_error_threshold = 5
+
+# =====================================
+# AI 模型配置
+# =====================================
+[ai]
+# AI 模型名稱
+# 可用選項: "claude-sonnet-4.5", "gpt-4", "gpt-3.5-turbo" 等
+model = "claude-sonnet-4.5"
+
+# 是否啟用 Copilot SDK 執行器
+enable_sdk = true
+
+# 是否偏好使用 SDK 而非 CLI
+prefer_sdk = true
+
+# =====================================
+# 輸出與顯示配置
+# =====================================
+[output]
+# 靜默模式 - 減少輸出內容
+silent = false
+
+# 詳細模式 - 增加除錯資訊
+verbose = false
+
+# 安靜模式 - 只顯示重要結果
+quiet = false
+
+# 預設輸出格式 ("text", "json", "table")
+format = "text"
+
+# 是否使用彩色輸出
+use_colors = true
+
+# =====================================
+# 安全性配置 (預留功能)
+# =====================================
+[security]
+# 沙箱模式 - 限制程式執行權限
+sandbox_mode = false
+
+# 允許執行的命令白名單
+allowed_commands = []
+
+# 是否啟用審計日誌
+enable_audit_log = false
+
+# 是否加密儲存憑證
+encrypt_credentials = false
+
+# =====================================
+# 進階功能配置 (預留功能)
+# =====================================
+[advanced]
+# 是否啟用效能指標收集
+enable_metrics = false
+
+# 指標服務埠號
+metrics_port = 8080
+
+# 是否啟用 Web UI
+enable_web_ui = false
+
+# Web UI 埠號
+web_ui_port = 3000
+
+# 插件目錄
+plugin_dir = "plugins"
+
+# =====================================
+# 使用說明
+# =====================================
+
+# 1. 建立配置文件：
+#    ralph-loop config -action init
+
+# 2. 顯示當前配置：
+#    ralph-loop config -action show
+
+# 3. 驗證配置：
+#    ralph-loop config -action validate
+
+# 4. 環境變數覆蓋：
+#    RALPH_CLI_TIMEOUT=120s ralph-loop run -prompt "test"
+#    RALPH_MODEL=gpt-4 ralph-loop status
+#    RALPH_VERBOSE=true ralph-loop status
+
+# 5. 常用環境變數：
+#    RALPH_CLI_TIMEOUT         # CLI 執行超時
+#    RALPH_CLI_MAX_RETRIES     # 最大重試次數
+#    RALPH_MODEL               # AI 模型
+#    RALPH_VERBOSE             # 詳細輸出
+#    RALPH_QUIET               # 安靜模式
+#    RALPH_SILENT              # 靜默模式
+#    RALPH_WORK_DIR            # 工作目錄
+#    RALPH_SAVE_DIR            # 儲存目錄
+#    RALPH_ENABLE_PERSISTENCE  # 啟用持久化
+#    RALPH_CIRCUIT_BREAKER_THRESHOLD    # 熔斷器閾值
+#    RALPH_SAME_ERROR_THRESHOLD         # 相同錯誤閾值
+#    RALPH_ENABLE_SDK          # 啟用 SDK
+#    RALPH_PREFER_SDK          # 偏好 SDK

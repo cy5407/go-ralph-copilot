@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  ralph-loop:
+    build: .
+    image: ralph-loop:latest
+    container_name: ralph-loop
+    volumes:
+      # 掛載工作目錄
+      - ./:/workspace
+      # 掛載 Copilot 配置（需先認證）
+      - ~/.config/github-copilot:/home/ralph/.config/github-copilot:ro
+    environment:
+      # 配置環境變數
+      - RALPH_DEBUG=${RALPH_DEBUG:-0}
+      - RALPH_CLI_TIMEOUT=${RALPH_CLI_TIMEOUT:-60s}
+      - RALPH_MAX_LOOPS=${RALPH_MAX_LOOPS:-10}
+      - COPILOT_MOCK_MODE=${COPILOT_MOCK_MODE:-false}
+    working_dir: /workspace
+    # 預設命令可被覆蓋
+    command: run -prompt "測試任務" -max-loops 5
+    # 限制資源使用
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    # 重啟策略
+    restart: on-failure
+    # 網路模式
+    network_mode: bridge
+
+  # 開發模式服務
+  ralph-loop-dev:
+    build: .
+    image: ralph-loop:dev
+    container_name: ralph-loop-dev
+    volumes:
+      - ./:/workspace
+      - ~/.config/github-copilot:/home/ralph/.config/github-copilot:ro
+    environment:
+      - RALPH_DEBUG=1
+      - RALPH_CLI_TIMEOUT=120s
+    working_dir: /workspace
+    command: watch -interval 5s
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge

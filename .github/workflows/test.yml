@@ -1,0 +1,124 @@
+name: 測試
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main, develop ]
+
+jobs:
+  test:
+    name: 測試
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go-version: ['1.21', '1.22', '1.23']
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout 程式碼
+      uses: actions/checkout@v4
+
+    - name: 設定 Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: 快取 Go 模組
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+    - name: 下載依賴
+      run: go mod download
+
+    - name: 驗證依賴
+      run: go mod verify
+
+    - name: 執行測試
+      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+    - name: 上傳測試覆蓋率到 Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.21'
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.txt
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+  lint:
+    name: 程式碼檢查
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout 程式碼
+      uses: actions/checkout@v4
+
+    - name: 設定 Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: 執行 go vet
+      run: go vet ./...
+
+    - name: 執行 go fmt 檢查
+      run: |
+        if [ -n "$(gofmt -l .)" ]; then
+          echo "以下檔案需要執行 go fmt："
+          gofmt -l .
+          exit 1
+        fi
+
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v4
+      with:
+        version: latest
+        args: --timeout=5m
+
+  build:
+    name: 建置
+    needs: [test, lint]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - name: Checkout 程式碼
+      uses: actions/checkout@v4
+
+    - name: 設定 Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: 建置所有套件
+      run: go build -v ./...
+
+    - name: 建置主程式
+      run: go build -v -o ralph-loop${{ matrix.os == 'windows-latest' && '.exe' || '' }} ./cmd/ralph-loop
+
+    - name: 驗證建置
+      shell: bash
+      run: |
+        if [ "${{ matrix.os }}" == "windows-latest" ]; then
+          ./ralph-loop.exe version
+        else
+          ./ralph-loop version
+        fi
+
+    - name: 上傳建置產物
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      uses: actions/upload-artifact@v4
+      with:
+        name: ralph-loop-${{ matrix.os }}
+        path: ralph-loop${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+        retention-days: 7

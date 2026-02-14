@@ -1,13 +1,16 @@
 package ghcopilot
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -78,6 +81,8 @@ type CLIExecutor struct {
 	requestID        string
 	telemetryEnabled bool
 	options          ExecutorOptions
+	streamCallback   func(string) // 串流 stdout 回調
+	streamErrCallback func(string) // 串流 stderr 回調
 }
 
 // NewCLIExecutor 建立新的 CLI 執行器
@@ -134,6 +139,12 @@ func (ce *CLIExecutor) SetTimeout(duration time.Duration) {
 // SetMaxRetries 設定最大重試次數
 func (ce *CLIExecutor) SetMaxRetries(retries int) {
 	ce.maxRetries = retries
+}
+
+// SetStreamCallback 設定串流輸出回調
+func (ce *CLIExecutor) SetStreamCallback(stdout, stderr func(string)) {
+	ce.streamCallback = stdout
+	ce.streamErrCallback = stderr
 }
 
 // buildArgs 根據選項構建 CLI 參數
@@ -368,6 +379,15 @@ func (ce *CLIExecutor) executeWithRetry(ctx context.Context, args []string) (*Ex
 			return result, nil
 		}
 
+		// 檢查是否為超時錯誤，如果是就不再重試
+		if err != nil {
+			if IsTimeout(err) || ctx.Err() == context.DeadlineExceeded {
+				debugLog("偵測到超時錯誤，停止重試")
+				lastErr = err
+				break
+			}
+		}
+
 		lastErr = err
 		result.Error = err
 
@@ -381,6 +401,72 @@ func (ce *CLIExecutor) executeWithRetry(ctx context.Context, args []string) (*Ex
 	}
 
 	return result, lastErr
+}
+
+// lineWriter 用於逐行串流輸出
+type lineWriter struct {
+	buffer   *bytes.Buffer  // 原始 buffer，保留完整輸出
+	callback func(string)   // 每行的回調函數
+	scanner  *bufio.Scanner // 逐行掃描器
+	mu       sync.Mutex     // 保護並發寫入
+	pipe     io.WriteCloser // 管道寫入端
+}
+
+// newLineWriter 創建新的行寫入器
+func newLineWriter(buffer *bytes.Buffer, callback func(string)) *lineWriter {
+	pr, pw := io.Pipe()
+	lw := &lineWriter{
+		buffer:   buffer,
+		callback: callback,
+		scanner:  bufio.NewScanner(pr),
+		pipe:     pw,
+	}
+	
+	// 啟動後台 goroutine 處理逐行讀取
+	go lw.processLines()
+	
+	return lw
+}
+
+// Write 實作 io.Writer 介面
+func (lw *lineWriter) Write(p []byte) (n int, err error) {
+	lw.mu.Lock()
+	defer lw.mu.Unlock()
+	
+	// 同時寫入原始 buffer
+	n, err = lw.buffer.Write(p)
+	if err != nil {
+		return n, err
+	}
+	
+	// 寫入管道供逐行處理
+	_, pipeErr := lw.pipe.Write(p)
+	if pipeErr != nil {
+		// 管道寫入失敗不影響原始 buffer
+		debugLog("管道寫入失敗: %v", pipeErr)
+	}
+	
+	return n, err
+}
+
+// Close 關閉行寫入器
+func (lw *lineWriter) Close() error {
+	return lw.pipe.Close()
+}
+
+// processLines 在後台處理逐行輸出
+func (lw *lineWriter) processLines() {
+	for lw.scanner.Scan() {
+		line := lw.scanner.Text()
+		if lw.callback != nil && line != "" {
+			lw.callback(line)
+		}
+	}
+	
+	// 檢查掃描器錯誤（忽略 io.EOF 和管道關閉）
+	if err := lw.scanner.Err(); err != nil && err != io.EOF && err != io.ErrClosedPipe {
+		debugLog("逐行掃描錯誤: %v", err)
+	}
 }
 
 // execute 執行殼層指令並捕獲輸出
@@ -414,8 +500,27 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 
 	// 捕獲輸出
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	
+	// 如果有串流回調，使用 lineWriter 進行串流輸出
+	var stdoutWriter, stderrWriter io.Writer
+	var stdoutLW, stderrLW *lineWriter
+	
+	if ce.streamCallback != nil {
+		stdoutLW = newLineWriter(&stdout, ce.streamCallback)
+		stdoutWriter = stdoutLW
+	} else {
+		stdoutWriter = &stdout
+	}
+	
+	if ce.streamErrCallback != nil {
+		stderrLW = newLineWriter(&stderr, ce.streamErrCallback)
+		stderrWriter = stderrLW
+	} else {
+		stderrWriter = &stderr
+	}
+	
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
 	cmd.Stdin = nil // 明確設定沒有輸入，防止卡在等待輸入
 
 	// 執行前日誌
@@ -440,16 +545,25 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 	debugLog("環境變數: %v", envVars)
 	debugLog("----------------------------------------")
 
-	infoLog("⏳ 執行 Copilot CLI (超時: %v)...", ce.timeout)
+	infoLog("⏳ 執行 Copilot CLI (單次超時: %v)...", ce.timeout)
 
 	// 執行指令
 	err := cmd.Run()
 	executionTime := time.Since(start)
+	
+	// 關閉串流寫入器
+	if stdoutLW != nil {
+		stdoutLW.Close()
+	}
+	if stderrLW != nil {
+		stderrLW.Close()
+	}
 
 	// 檢查是否超時
 	if execCtx.Err() == context.DeadlineExceeded {
 		debugLog("⚠️  執行超時！已達到 %v 的限制", ce.timeout)
 		infoLog("⚠️  執行超時 - 可能需要增加超時設定或檢查 Copilot CLI 狀態")
+		err = WrapError(ErrorTypeTimeout, "CLI execution timed out", context.DeadlineExceeded)
 	}
 
 	result := &ExecutionResult{

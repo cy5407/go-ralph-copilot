@@ -160,7 +160,77 @@ CLOSED (恢復正常)
 決策: 必須層次 1 + (層次 2 或層次 3)
 ```
 
+## 🔍 智能搜尋策略 (fd + rg)
+
+使用 fd 和 ripgrep 進行精確的代碼探索和修改：
+
+### fd (檔案搜尋)
+```bash
+# 尋找特定類型檔案
+fd "\.go$" --type f                    # 所有 Go 檔案
+fd "client\.go$" internal/             # 特定檔案在特定目錄
+fd "test" --type d                     # 測試目錄
+fd "config|setting" --ignore-case     # 配置相關檔案
+```
+
+### rg (內容搜尋)
+```bash
+# 搜尋函數定義
+rg "func.*ExecuteLoop" --type go       # Go 函數
+rg "type.*Client.*struct" --type go    # 結構定義
+rg "const.*Error" --type go            # 常數定義
+
+# 搜尋錯誤處理
+rg "panic\(" --type go                 # 尋找 panic 調用
+rg "\.Error\(\)" --type go -A 3 -B 3   # 錯誤處理上下文
+
+# 搜尋配置與參數
+rg "config\." --type go                # 配置使用
+rg "timeout|超時" --ignore-case        # 超時相關代碼
+```
+
+### 組合搜尋策略
+```bash
+# 1. 先用 fd 找到相關檔案
+fd "client|executor" --type f | head -10
+
+# 2. 再用 rg 搜尋具體內容
+rg "ExecuteUntilCompletion" $(fd "client\.go$")
+
+# 3. 深度分析錯誤處理
+rg "Error.*=.*" --type go -n | rg "timeout|超時"
+
+# 4. 搜尋特定模式並顯示上下文
+rg "ShouldContinue.*false" --type go -B 3 -A 3
+```
+
 ## 程式碼慣例
+
+### 修改代碼的最佳實踐
+
+#### 🔍 搜尋優先策略
+**修改代碼前，必須先使用 fd 和 rg 進行全面搜尋：**
+
+```bash
+# 步驟 1: 定位相關檔案
+fd "關鍵字" --type f
+
+# 步驟 2: 搜尋具體實作
+rg "目標函數|類型" --type go -A 5 -B 5
+
+# 步驟 3: 理解錯誤處理
+rg "Error" $(fd "client\.go$") -n
+
+# 步驟 4: 檢查測試覆蓋
+fd "test" --type f | xargs rg "TestTargetFunction"
+```
+
+#### ⚡ 一次性修改原則
+避免遺漏相關檔案，必須：
+1. **搜尋所有相關位置**：`rg "目標功能" --type go -l`
+2. **理解依賴關係**：檢查匯入和調用
+3. **同時修改**：一次性修正所有相關檔案
+4. **驗證完整性**：確保修改後程式能編譯
 
 ### 執行邏輯修改指南
 

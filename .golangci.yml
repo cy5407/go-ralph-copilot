@@ -1,0 +1,155 @@
+# GolangCI-Lint 配置
+# 文檔: https://golangci-lint.run/usage/configuration/
+
+run:
+  # 超時設定
+  timeout: 5m
+  
+  # 要檢查的 Go 版本
+  go: '1.21'
+  
+  # 要掃描的目錄
+  tests: true
+  
+  # 並發檢查數
+  concurrency: 4
+
+# 輸出配置
+output:
+  # 輸出格式：colored-line-number, line-number, json, tab, checkstyle
+  format: colored-line-number
+  
+  # 顯示所有問題
+  print-issued-lines: true
+  print-linter-name: true
+
+# Linters 設定
+linters:
+  # 啟用特定的 linters
+  enable:
+    - gofmt        # 檢查程式碼格式
+    - goimports    # 檢查 import 排序
+    - govet        # Go 官方檢查工具
+    - errcheck     # 檢查錯誤處理
+    - staticcheck  # 靜態分析
+    - unused       # 檢查未使用的程式碼
+    - gosimple     # 簡化程式碼建議
+    - ineffassign  # 檢查無效的賦值
+    - typecheck    # 型別檢查
+    - misspell     # 拼寫檢查
+    - gocritic     # 程式碼審查建議
+    - gocyclo      # 循環複雜度
+    - dupl         # 重複程式碼檢測
+    - gosec        # 安全性檢查
+    - revive       # 快速的 lint 工具
+  
+  # 停用的 linters
+  disable:
+    - deadcode     # 已棄用，使用 unused 替代
+    - structcheck  # 已棄用
+    - varcheck     # 已棄用
+    - maligned     # 已棄用
+
+# Linters 設定
+linters-settings:
+  # errcheck 設定
+  errcheck:
+    # 檢查型別斷言
+    check-type-assertions: true
+    # 檢查空白賦值
+    check-blank: true
+  
+  # govet 設定
+  govet:
+    # 檢查 shadow 變數
+    check-shadowing: true
+  
+  # gocyclo 設定
+  gocyclo:
+    # 最大循環複雜度
+    min-complexity: 15
+  
+  # dupl 設定
+  dupl:
+    # 最小重複行數
+    threshold: 100
+  
+  # gocritic 設定
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+      - style
+    disabled-checks:
+      - commentedOutCode
+      - whyNoLint
+  
+  # misspell 設定
+  misspell:
+    locale: US
+  
+  # revive 設定
+  revive:
+    confidence: 0.8
+  
+  # gosec 設定
+  gosec:
+    # 要排除的規則
+    excludes:
+      - G204  # 子程序啟動（我們需要執行 copilot CLI）
+      - G304  # 檔案路徑（我們需要讀寫使用者檔案）
+
+# 問題過濾
+issues:
+  # 最大問題數（0 = 無限制）
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  
+  # 要排除的規則
+  exclude-rules:
+    # 測試檔案放寬檢查
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+    
+    # 自動生成的檔案
+    - path: mock_.*\.go
+      linters:
+        - golint
+        - stylecheck
+    
+    # 特定錯誤訊息排除
+    - text: "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*print(f|ln)?|os\\.(Un)?Setenv). is not checked"
+      linters:
+        - errcheck
+    
+    # 註解相關
+    - text: "should have( a package)? comment"
+      linters:
+        - revive
+        - stylecheck
+  
+  # 要排除的檔案模式
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*\\.gen\\.go$"
+  
+  # 不排除預設的排除規則
+  exclude-use-default: false
+
+# 嚴格模式設定
+severity:
+  # 最低嚴重性等級
+  default-severity: warning
+  
+  # 規則嚴重性設定
+  rules:
+    - linters:
+        - dupl
+      severity: info
+    - linters:
+        - gosec
+      severity: error

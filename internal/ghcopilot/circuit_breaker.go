@@ -3,7 +3,6 @@ package ghcopilot
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -181,7 +180,7 @@ func (cb *CircuitBreaker) SaveState() error {
 		return fmt.Errorf("無法序列化狀態: %w", err)
 	}
 
-	return ioutil.WriteFile(cb.stateFile, jsonData, 0644)
+	return os.WriteFile(cb.stateFile, jsonData, 0644)
 }
 
 // LoadState 從檔案載入狀態
@@ -190,7 +189,7 @@ func (cb *CircuitBreaker) LoadState() error {
 		return nil // 檔案不存在，使用預設值
 	}
 
-	data, err := ioutil.ReadFile(cb.stateFile)
+	data, err := os.ReadFile(cb.stateFile)
 	if err != nil {
 		return fmt.Errorf("無法讀取狀態檔案: %w", err)
 	}

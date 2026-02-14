@@ -1,0 +1,206 @@
+name: 發布版本
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: 建置並發布
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout 程式碼
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: 設定 Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: 取得版本號
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: 執行測試
+      run: go test -v ./...
+
+    - name: 建置所有平台
+      run: |
+        mkdir -p dist
+        
+        # Windows AMD64
+        GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/ralph-loop-windows-amd64.exe ./cmd/ralph-loop
+        
+        # Windows ARM64
+        GOOS=windows GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/ralph-loop-windows-arm64.exe ./cmd/ralph-loop
+        
+        # Linux AMD64
+        GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/ralph-loop-linux-amd64 ./cmd/ralph-loop
+        
+        # Linux ARM64
+        GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/ralph-loop-linux-arm64 ./cmd/ralph-loop
+        
+        # macOS AMD64
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/ralph-loop-darwin-amd64 ./cmd/ralph-loop
+        
+        # macOS ARM64 (M1/M2)
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }}" -o dist/ralph-loop-darwin-arm64 ./cmd/ralph-loop
+
+    - name: 創建壓縮檔
+      run: |
+        cd dist
+        
+        # 為 Windows 創建 ZIP
+        zip ralph-loop-${{ steps.version.outputs.VERSION }}-windows-amd64.zip ralph-loop-windows-amd64.exe
+        zip ralph-loop-${{ steps.version.outputs.VERSION }}-windows-arm64.zip ralph-loop-windows-arm64.exe
+        
+        # 為 Linux 和 macOS 創建 tar.gz
+        tar czf ralph-loop-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz ralph-loop-linux-amd64
+        tar czf ralph-loop-${{ steps.version.outputs.VERSION }}-linux-arm64.tar.gz ralph-loop-linux-arm64
+        tar czf ralph-loop-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz ralph-loop-darwin-amd64
+        tar czf ralph-loop-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz ralph-loop-darwin-arm64
+        
+        # 刪除原始二進位檔案
+        rm -f *.exe ralph-loop-*
+        ls -lh
+
+    - name: 計算檔案雜湊值
+      run: |
+        cd dist
+        sha256sum *.zip *.tar.gz > checksums.txt
+        cat checksums.txt
+
+    - name: 生成發布日誌
+      id: changelog
+      run: |
+        # 取得前一個標籤
+        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        if [ -z "$PREV_TAG" ]; then
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "## 🎉 首次發布" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "這是 Ralph Loop 的首次正式發布版本！" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        else
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "## 📝 變更日誌" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        fi
+
+    - name: 創建 GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Release ${{ steps.version.outputs.VERSION }}
+        body: |
+          # Ralph Loop ${{ steps.version.outputs.VERSION }}
+          
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## 📦 下載與安裝
+          
+          ### Windows
+          下載對應版本：
+          - **AMD64**: `ralph-loop-${{ steps.version.outputs.VERSION }}-windows-amd64.zip`
+          - **ARM64**: `ralph-loop-${{ steps.version.outputs.VERSION }}-windows-arm64.zip`
+          
+          解壓縮後將 `ralph-loop.exe` 放到系統 PATH 中。
+          
+          ### Linux
+          ```bash
+          # AMD64
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/ralph-loop-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
+          tar xzf ralph-loop-${{ steps.version.outputs.VERSION }}-linux-amd64.tar.gz
+          chmod +x ralph-loop-linux-amd64
+          sudo mv ralph-loop-linux-amd64 /usr/local/bin/ralph-loop
+          ```
+          
+          ### macOS
+          ```bash
+          # Apple Silicon (M1/M2/M3)
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/ralph-loop-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz
+          tar xzf ralph-loop-${{ steps.version.outputs.VERSION }}-darwin-arm64.tar.gz
+          chmod +x ralph-loop-darwin-arm64
+          sudo mv ralph-loop-darwin-arm64 /usr/local/bin/ralph-loop
+          
+          # Intel
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION }}/ralph-loop-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz
+          tar xzf ralph-loop-${{ steps.version.outputs.VERSION }}-darwin-amd64.tar.gz
+          chmod +x ralph-loop-darwin-amd64
+          sudo mv ralph-loop-darwin-amd64 /usr/local/bin/ralph-loop
+          ```
+          
+          ## 🔒 驗證檔案完整性
+          
+          下載 `checksums.txt` 並驗證：
+          ```bash
+          sha256sum -c checksums.txt
+          ```
+          
+          ## 📚 文檔
+          
+          - [README.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.VERSION }}/README.md)
+          - [USAGE_GUIDE.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.VERSION }}/USAGE_GUIDE.md)
+          - [DEPLOYMENT_GUIDE.md](https://github.com/${{ github.repository }}/blob/${{ steps.version.outputs.VERSION }}/DEPLOYMENT_GUIDE.md)
+          
+          ## 🐛 回報問題
+          
+          如有任何問題，請在 [Issues](https://github.com/${{ github.repository }}/issues) 回報。
+        files: |
+          dist/*.zip
+          dist/*.tar.gz
+          dist/checksums.txt
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.VERSION, 'rc') || contains(steps.version.outputs.VERSION, 'beta') || contains(steps.version.outputs.VERSION, 'alpha') }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: 建置並推送 Docker 映像
+    runs-on: ubuntu-latest
+    needs: release
+    
+    steps:
+    - name: Checkout 程式碼
+      uses: actions/checkout@v4
+
+    - name: 設定 Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: 登入 Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+      if: github.event_name != 'pull_request'
+
+    - name: 提取 Docker 元數據
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_USERNAME }}/ralph-loop
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: 建置並推送 Docker 映像
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max

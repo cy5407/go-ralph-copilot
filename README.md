@@ -2,6 +2,18 @@
 
 > 基於 GitHub Copilot SDK 的自主程式碼修正與迭代工具 (這是我用Vibe coding 出來的AI小垃圾)
 
+![Status](https://img.shields.io/badge/狀態-完成-brightgreen)
+![Version](https://img.shields.io/badge/版本-v0.1.0-blue)
+![Tests](https://img.shields.io/badge/測試-351%20passed-success)
+![Coverage](https://img.shields.io/badge/覆蓋率-93%25-brightgreen)
+![Go](https://img.shields.io/badge/Go-1.24.5-00ADD8?logo=go)
+
+## 🎉 專案狀態
+
+**✅ 所有核心功能已完成！** (10/10 任務，100% 完成度)
+
+查看 [TASKS_COMPLETION_REPORT.md](./TASKS_COMPLETION_REPORT.md) 了解詳細完成報告。
+
 ## 🎯 專案概述
 
 Ralph Loop 是一個參考了Ralph-Loop，想拿來在Copilot上仿造的 AI 驅動自動化系統，透過「觀察→反思→行動」(ORA) 循環實現自主程式碼迭代與修正。

@@ -1,33 +1,63 @@
-# T2-002: 移除 panic() 與改善錯誤處理 - 完成報告
+# T2-002: 錯誤處理修復完成報告 ✅
 
-## 任務概述
-**任務 ID**: T2-002  
-**完成時間**: 2025年1月23日  
-**狀態**: ✅ 已完成  
-**優先級**: P0 (緊急)
+## 📋 任務概要  
+**任務 ID**: T2-002: 移除 panic() 與改善錯誤處理  
+**完成時間**: 2025年1月3日 00:23  
+**狀態**: ✅ 已完成並驗證  
+**優先級**: P0 (緊急)  
+**修復方法**: 智能搜索技能 + 系統性錯誤處理修復
 
-## 修復內容
+## 🎯 修復成果摘要
 
-### 1. ❌ panic() 搜尋結果
-```bash
-grep -rn "panic(" . --include="*.go"
-# 結果：無發現任何 panic() 調用
-```
-**結論**：代碼庫中未發現 panic() 調用，無需移除。
+**問題**: 執行失敗時錯誤顯示「結束原因: 任務完成」❌  
+**修復**: 正確顯示「結束原因: [EXECUTION_ERROR] execution failed」✅  
+**核心**: 修復輸出格式化器硬編碼邏輯，使用 LoopResult 實際狀態判斷
 
-### 2. ✅ 錯誤處理系統檢查
-發現已存在完整的錯誤處理系統：
+## 🔧 主要修復內容
 
-#### A. 統一錯誤類型 (errors.go)
+### 1. Smart-Search 技能創建 🔍
+創建 `.claude/skills/smart-search/SKILL.md` 智能搜索技能：
+- **整合工具**: fd (檔案搜索) + rg (內容搜索)
+- **專案範例**: Ralph Loop 特定搜索策略  
+- **自動化**: 系統性代碼探索與修改準備
+
+### 2. 核心修復: output_formatter.go 🛠️
+**檔案**: `internal/ghcopilot/output_formatter.go`  
+**修改位置**: Lines 107-113 (formatTable), 126-132 (formatText)  
+**新增函數**: hasFailedResults() (Lines 213-220)
+
+**修復前邏輯** (錯誤):
 ```go
-type RalphLoopError struct {
-    Type    ErrorType
-    Message string
-    Cause   error
-    Context map[string]interface{}
+if err != nil {
+    fmt.Fprintf(f.writer, "結束原因: %v\n", err)
+} else {
+    fmt.Fprintln(f.writer, "結束原因: 任務完成") // ❌ 硬編碼
 }
+```
 
-// 錯誤分類常數
+**修復後邏輯** (正確):  
+```go
+if err != nil {
+    fmt.Fprintf(f.writer, "結束原因: %v\n", err)
+} else if hasFailedResults(results) {
+    fmt.Fprintln(f.writer, "結束原因: 執行失敗") // ✅ 檢查實際狀態
+} else {
+    fmt.Fprintln(f.writer, "結束原因: 任務完成")
+}
+```
+
+**新增輔助函數**:
+```go
+// hasFailedResults 檢查是否有失敗的迴圈結果
+func hasFailedResults(results []*LoopResult) bool {
+    for _, result := range results {
+        if result.IsFailed() { // 使用 !ShouldContinue && Error != nil
+            return true
+        }
+    }
+    return false
+}
+```
 const (
     ErrorTypeTimeout         = "TIMEOUT"
     ErrorTypeCircuitOpen     = "CIRCUIT_OPEN"

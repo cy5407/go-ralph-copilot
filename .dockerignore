@@ -1,0 +1,53 @@
+# 建置產物
+ralph-loop
+ralph-loop.exe
+*.exe
+*.dll
+*.so
+*.dylib
+dist/
+
+# 測試與覆蓋率
+*.test
+*.out
+coverage.txt
+*.cover
+
+# 依賴
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 作業系統
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# 日誌與暫存檔案
+*.log
+*.tmp
+.ralph-loop/logs/
+logs/
+
+# 文檔草稿
+*.draft.md
+archive/
+
+# 環境變數
+.env
+.env.local
+
+# Node modules (若有前端)
+node_modules/
+
+# 測試資料
+test/fixtures/
+test/tmp/
