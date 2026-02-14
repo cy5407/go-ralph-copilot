@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,7 +64,7 @@ type ExecutorOptions struct {
 func DefaultOptions() ExecutorOptions {
 	return ExecutorOptions{
 		Model:         ModelClaudeSonnet45,
-		Silent:        true,  // 預設安靜模式，適合程式化使用
+		Silent:        false, // 顯示 Copilot 輸出，便於觀察 AI 行為
 		AllowAllTools: true,  // 預設允許所有工具，適合自動化
 		NoAskUser:     true,  // 預設自主模式
 	}
@@ -412,10 +413,10 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 
 	cmd.Env = append(os.Environ(), envVars...)
 
-	// 捕獲輸出
+	// 捕獲輸出並同時顯示到終端
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = io.MultiWriter(&stdout, os.Stdout) // 同時寫入 buffer 和終端
+	cmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
 	cmd.Stdin = nil // 明確設定沒有輸入，防止卡在等待輸入
 
 	// 執行前日誌

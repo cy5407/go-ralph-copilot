@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	version = "0.1.0"
+	Version = "0.1.0"
 )
 
 func main() {
@@ -64,7 +64,7 @@ func main() {
 		cmdWatch(*watchWorkDir, *watchInterval)
 
 	case "version":
-		fmt.Printf("Ralph Loop v%s\n", version)
+		fmt.Printf("Ralph Loop v%s\n", Version)
 
 	case "help", "-h", "--help":
 		printUsage()
@@ -104,7 +104,7 @@ func printUsage() {
   ralph-loop reset
 
 更多資訊請參考: https://github.com/cy540/ralph-loop
-`, version)
+`, Version)
 }
 
 func cmdRun(prompt string, maxLoops int, timeout time.Duration, workDir string, silent bool) {
