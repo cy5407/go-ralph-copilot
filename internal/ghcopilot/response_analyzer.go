@@ -37,8 +37,8 @@ func NewResponseAnalyzer(response string) *ResponseAnalyzer {
 
 // ParseStructuredOutput 解析結構化輸出區塊
 func (ra *ResponseAnalyzer) ParseStructuredOutput() *CopilotStatus {
-	// 查找 ---COPILOT_STATUS--- 區塊
-	pattern := `(?s)---COPILOT_STATUS---\n(.*?)\n---END_STATUS---`
+	// 查找 ---COPILOT_STATUS--- 或 ---RALPH_STATUS--- 區塊
+	pattern := `(?s)---(?:COPILOT_STATUS|RALPH_STATUS)---\n(.*?)\n---END(?:_STATUS|_RALPH_STATUS)---`
 	re := regexp.MustCompile(pattern)
 	matches := re.FindStringSubmatch(ra.response)
 
