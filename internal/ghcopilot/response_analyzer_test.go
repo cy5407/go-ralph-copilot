@@ -115,14 +115,14 @@ func TestDualConditionVerification(t *testing.T) {
 		t.Error("只有分數沒有 EXIT_SIGNAL 不應視為完成")
 	}
 
-	// 有 EXIT_SIGNAL 但分數不足
+	// EXIT_SIGNAL=true 單獨就夠，不需要分數
 	response2 := `---COPILOT_STATUS---
 EXIT_SIGNAL: true
 ---END_STATUS---`
 	ra2 := NewResponseAnalyzer(response2)
 
-	if ra2.IsCompleted() {
-		t.Error("分數不足即使有 EXIT_SIGNAL 也不應視為完成")
+	if !ra2.IsCompleted() {
+		t.Error("有 EXIT_SIGNAL=true 應視為完成")
 	}
 
 	// 兩個條件都滿足

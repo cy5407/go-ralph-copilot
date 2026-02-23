@@ -37,8 +37,8 @@ func NewResponseAnalyzer(response string) *ResponseAnalyzer {
 
 // ParseStructuredOutput 解析結構化輸出區塊
 func (ra *ResponseAnalyzer) ParseStructuredOutput() *CopilotStatus {
-	// 查找 ---COPILOT_STATUS--- 或 ---RALPH_STATUS--- 區塊
-	pattern := `(?s)---(?:COPILOT_STATUS|RALPH_STATUS)---\n(.*?)\n---END(?:_STATUS|_RALPH_STATUS)---`
+	// 查找 ---COPILOT_STATUS--- 或 ---RALPH_STATUS--- 區塊，支援 CRLF
+	pattern := `(?s)---(?:COPILOT_STATUS|RALPH_STATUS)---\r?\n(.*?)\r?\n---END(?:_STATUS|_RALPH_STATUS)---`
 	re := regexp.MustCompile(pattern)
 	matches := re.FindStringSubmatch(ra.response)
 
@@ -46,7 +46,8 @@ func (ra *ResponseAnalyzer) ParseStructuredOutput() *CopilotStatus {
 		return nil
 	}
 
-	block := matches[1]
+	// 正規化 CRLF
+	block := strings.ReplaceAll(matches[1], "\r\n", "\n")
 	status := &CopilotStatus{
 		RawBlock: block,
 	}
@@ -97,6 +98,12 @@ func (ra *ResponseAnalyzer) CalculateCompletionScore() int {
 	noWorkPatterns := []string{
 		"沒有更多工作", "no more work", "沒有其他",
 		"no further changes", "沒有待辦",
+		// Layer 2：補充「任務不需要做」的自然語言備用偵測
+		"不需要更新", "無需更新", "無需修改", "不需要push", "無需push",
+		"不需要 push", "無需 push", "不需要git push", "無需git push",
+		"已是最新", "已完整", "狀態良好", "無需任何",
+		"no update needed", "no changes needed", "up to date",
+		"nothing to push", "no action required", "already up to date",
 	}
 
 	for _, pattern := range noWorkPatterns {
@@ -218,19 +225,19 @@ func (ra *ResponseAnalyzer) GetAnalysisSummary() map[string]interface{} {
 }
 
 // IsCompleted 確定是否應該完成
-// 基於 ralph-claude-code 的雙重條件驗證
+// 三層防禦策略
 func (ra *ResponseAnalyzer) IsCompleted() bool {
-	// 必須至少有 2 個完成指標
-	if len(ra.completionIndicators) < 2 {
-		return false
-	}
-
-	// 必須有明確的 EXIT_SIGNAL = true
 	status := ra.ParseStructuredOutput()
-	if status == nil || !status.ExitSignal {
-		return false
+
+	// Layer 3：EXIT_SIGNAL=true 單獨就夠，不需要第二條件
+	if status != nil && status.ExitSignal {
+		return true
 	}
 
-	// 雙重條件都滿足才退出
-	return true
+	// 備用：無結構化輸出，但自然語言分數夠高（≥ 30）且有 2 個指標
+	if ra.completionScore >= 30 && len(ra.completionIndicators) >= 2 {
+		return true
+	}
+
+	return false
 }
