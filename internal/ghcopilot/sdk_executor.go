@@ -115,20 +115,39 @@ func (e *SDKExecutor) Stop(ctx context.Context) error {
 		return fmt.Errorf("sdk executor not running")
 	}
 
+	var errs []error
+
 	// 清理所有會話
 	if err := e.sessions.ClearAll(); err != nil {
-		e.lastError = fmt.Errorf("failed to clear sessions: %w", err)
+		e.lastError = fmt.Errorf("清理會話失敗: %w", err)
+		errs = append(errs, e.lastError)
+		fmt.Printf("⚠️ %v\n", e.lastError)
 	}
 
 	// 停止客戶端
 	if e.client != nil {
-		errs := e.client.Stop()
-		if len(errs) > 0 {
-			e.lastError = fmt.Errorf("errors during client stop: %v", errs)
+		clientErrs := e.client.Stop()
+		if len(clientErrs) > 0 {
+			e.lastError = fmt.Errorf("停止客戶端時發生錯誤: %v", clientErrs)
+			errs = append(errs, e.lastError)
+			fmt.Printf("⚠️ %v\n", e.lastError)
 		}
 	}
 
 	e.running = false
+
+	// 如果有錯誤，合併返回
+	if len(errs) > 0 {
+		var errMsg string
+		for i, err := range errs {
+			if i > 0 {
+				errMsg += "; "
+			}
+			errMsg += err.Error()
+		}
+		return fmt.Errorf("停止 SDK 執行器失敗: %s", errMsg)
+	}
+
 	return nil
 }
 

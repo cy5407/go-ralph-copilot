@@ -82,29 +82,39 @@ func (r *AutoReconnectRecovery) Recover(ctx context.Context, err error) error {
 	retryDelay := r.retryDelay
 	r.mu.Unlock()
 
+	fmt.Printf("🔄 開始恢復策略（最多重試 %d 次）: %v\n", maxRetries, err)
+
 	var lastErr error
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		select {
 		case <-ctx.Done():
+			fmt.Printf("⚠️ 恢復策略被取消: %v\n", ctx.Err())
 			return ctx.Err()
 		default:
 		}
 
+		fmt.Printf("🔄 恢復嘗試 %d/%d...\n", attempt, maxRetries)
 		lastErr = connectFunc(ctx)
 		if lastErr == nil {
+			fmt.Printf("✅ 恢復成功（嘗試 %d 次）\n", attempt)
 			return nil
 		}
+		fmt.Printf("⚠️ 恢復嘗試 %d 失敗: %v\n", attempt, lastErr)
 
 		// 指數退避
 		delay := retryDelay * time.Duration(attempt)
+		fmt.Printf("⏳ 等待 %v 後重試...\n", delay)
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
+			fmt.Printf("⚠️ 恢復策略被取消: %v\n", ctx.Err())
 			return ctx.Err()
 		}
 	}
 
-	return fmt.Errorf("auto reconnect failed after %d attempts: %w", maxRetries, lastErr)
+	finalErr := fmt.Errorf("自動重連失敗（已嘗試 %d 次）: %w", maxRetries, lastErr)
+	fmt.Printf("❌ %v\n", finalErr)
+	return finalErr
 }
 
 // GetType 取得策略類型
@@ -153,19 +163,24 @@ func (r *SessionRestoreRecovery) Recover(ctx context.Context, err error) error {
 	r.mu.Unlock()
 
 	if sessionID == "" {
-		return fmt.Errorf("no session ID configured for restore")
+		return fmt.Errorf("恢復會話失敗：未設定會話 ID")
 	}
 
 	select {
 	case <-ctx.Done():
+		fmt.Printf("⚠️ 會話恢復被取消: %v\n", ctx.Err())
 		return ctx.Err()
 	default:
 	}
 
+	fmt.Printf("🔄 嘗試恢復會話: %s\n", sessionID)
 	if restoreErr := restoreFunc(ctx, sessionID); restoreErr != nil {
-		return fmt.Errorf("session restore failed: %w", restoreErr)
+		finalErr := fmt.Errorf("會話恢復失敗: %w", restoreErr)
+		fmt.Printf("❌ %v\n", finalErr)
+		return finalErr
 	}
 
+	fmt.Printf("✅ 會話恢復成功: %s\n", sessionID)
 	return nil
 }
 
@@ -210,19 +225,24 @@ func (r *FallbackRecovery) Recover(ctx context.Context, err error) error {
 
 	select {
 	case <-ctx.Done():
+		fmt.Printf("⚠️ 故障轉移被取消: %v\n", ctx.Err())
 		return ctx.Err()
 	default:
 	}
 
+	fmt.Printf("🔄 執行故障轉移策略: %v\n", err)
 	result, fallbackErr := fallbackFunc(ctx)
 	if fallbackErr != nil {
-		return fmt.Errorf("fallback failed: %w", fallbackErr)
+		finalErr := fmt.Errorf("故障轉移失敗: %w", fallbackErr)
+		fmt.Printf("❌ %v\n", finalErr)
+		return finalErr
 	}
 
 	r.mu.Lock()
 	r.lastResult = result
 	r.mu.Unlock()
 
+	fmt.Printf("✅ 故障轉移成功\n")
 	return nil
 }
 

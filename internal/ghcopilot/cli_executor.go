@@ -64,9 +64,9 @@ type ExecutorOptions struct {
 func DefaultOptions() ExecutorOptions {
 	return ExecutorOptions{
 		Model:         ModelClaudeSonnet45,
-		Silent:        false, // 顯示 Copilot 輸出，便於觀察 AI 行為
-		AllowAllTools: true,  // 預設允許所有工具，適合自動化
-		NoAskUser:     true,  // 預設自主模式
+		Silent:        true, // 預設安靜模式，減少輸出
+		AllowAllTools: true, // 預設允許所有工具，適合自動化
+		NoAskUser:     true, // 預設自主模式
 	}
 }
 
@@ -598,8 +598,11 @@ func debugLog(format string, args ...interface{}) {
 	}
 }
 
-// infoLog 輸出資訊日誌（總是顯示）
+// infoLog 輸出資訊日誌（靜默模式時不顯示）
 func infoLog(format string, args ...interface{}) {
+	if os.Getenv("RALPH_SILENT") == "1" {
+		return
+	}
 	timestamp := time.Now().Format("15:04:05.000")
 	fmt.Printf("[INFO %s] ", timestamp)
 	fmt.Printf(format, args...)

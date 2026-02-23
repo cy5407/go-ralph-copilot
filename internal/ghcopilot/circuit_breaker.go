@@ -136,7 +136,9 @@ func (cb *CircuitBreaker) openCircuit(reason string) {
 		cb.state = StateOpen
 		cb.lastStateChange = time.Now()
 		fmt.Printf("⚠️ 熔斷器打開: %s\n", reason)
-		cb.SaveState()
+		if err := cb.SaveState(); err != nil {
+			fmt.Printf("⚠️ 儲存熔斷器狀態失敗: %v\n", err)
+		}
 	}
 }
 
@@ -149,7 +151,9 @@ func (cb *CircuitBreaker) Reset() {
 	cb.lastStateChange = time.Now()
 	cb.totalErrors = 0
 	cb.lastErrors = []string{}
-	cb.SaveState()
+	if err := cb.SaveState(); err != nil {
+		fmt.Printf("⚠️ 儲存熔斷器狀態失敗: %v\n", err)
+	}
 	fmt.Println("✅ 熔斷器已重置")
 }
 

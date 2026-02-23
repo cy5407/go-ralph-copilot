@@ -2,6 +2,7 @@ package ghcopilot
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -623,6 +624,7 @@ func (h *HybridExecutor) Execute(ctx context.Context, task *Task) (string, error
 		// 混合模式：先嘗試 SDK，失敗則使用 CLI
 		result, err = sdkFunc(ctx, prompt)
 		if err != nil && h.selector.IsFallbackEnabled() && h.selector.IsCLIAvailable() {
+			fmt.Printf("⚠️ SDK 執行失敗，自動切換至 CLI 模式: %v\n", err)
 			result, err = cliFunc(ctx, prompt)
 			mode = ModeCLI // 更新記錄的模式
 		}

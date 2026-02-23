@@ -3,6 +3,7 @@ package ghcopilot
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
@@ -107,7 +108,9 @@ func NewRalphLoopClientWithConfig(config *ClientConfig) *RalphLoopClient {
 
 	if config.EnablePersistence {
 		pm, err := NewPersistenceManager(config.SaveDir, config.UseGobFormat)
-		if err == nil {
+		if err != nil {
+			log.Printf("⚠️ 持久化管理器初始化失敗: %v (持久化功能將被禁用)", err)
+		} else {
 			client.persistence = pm
 		}
 	}
@@ -179,14 +182,13 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 	defer func() {
 		// 完成迴圈
 		if err := c.contextManager.FinishLoop(); err != nil {
-			// 日誌記錄
+			log.Printf("⚠️ 迴圈結束記錄失敗: %v", err)
 		}
 
 		// 自動持久化整個 ContextManager（如果啟用）
 		if c.persistence != nil && c.config.EnablePersistence {
 			if err := c.persistence.SaveContextManager(c.contextManager); err != nil {
-				// 記錄但不影響主流程
-				_ = err
+				log.Printf("⚠️ 上下文持久化失敗 (迴圈 %d): %v", loopIndex, err)
 			}
 		}
 	}()
@@ -236,28 +238,39 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 	// 解析輸出
 	parser := NewOutputParser(output)
 	parser.Parse()
-	codeBlocks := parser.GetOptions() // 臨時使用，實際應有完整解析
+	codeBlocks := parser.GetOptions()
 
 	execCtx.ParsedCodeBlocks = codeBlocks
 	execCtx.CleanedOutput = output
 
-	// 分析回應（簡化版本，實際應使用完整分析器）
-	// 如果輸出包含完成關鍵字，則視為完成
-	shouldContinue := !strings.Contains(output, "完成") && !strings.Contains(output, "done")
+	// 使用 ResponseAnalyzer 分析回應（雙重條件驗證）
+	analyzer := NewResponseAnalyzer(output)
+	score := analyzer.CalculateCompletionScore()
+	execCtx.CompletionScore = score
+	completed := analyzer.IsCompleted()
 
+	shouldContinue := !completed
 	execCtx.ShouldContinue = shouldContinue
+
 	if !shouldContinue {
 		c.breaker.RecordSuccess()
-		execCtx.ExitReason = "completion detected in output"
+		execCtx.ExitReason = "任務完成 (EXIT_SIGNAL=true)"
 	} else {
-		c.breaker.RecordNoProgress()
+		// 只在輸出與前一次迴圈完全相同時才記錄無進展（真正卡住）
+		history := c.contextManager.GetLoopHistory()
+		if len(history) > 0 && history[len(history)-1].CLIOutput == output {
+			c.breaker.RecordNoProgress()
+		}
 	}
 
 	execCtx.CircuitBreakerState = string(c.breaker.GetState())
 
 	// 個別執行上下文的持久化（可選）
 	if c.persistence != nil && c.config.EnablePersistence {
-		_ = c.persistence.SaveExecutionContext(execCtx)
+		if err := c.persistence.SaveExecutionContext(execCtx); err != nil {
+			// 記錄警告但不中斷執行流程
+			fmt.Printf("⚠️ 儲存執行上下文失敗: %v\n", err)
+		}
 	}
 
 	return c.createResult(execCtx, shouldContinue), nil
@@ -627,17 +640,36 @@ func (c *RalphLoopClient) Close() error {
 		return fmt.Errorf("client already closed")
 	}
 
+	var errs []error
+
 	// 執行最後的持久化
 	if c.persistence != nil && c.config.EnablePersistence {
-		_ = c.persistence.SaveContextManager(c.contextManager)
+		if err := c.persistence.SaveContextManager(c.contextManager); err != nil {
+			errs = append(errs, fmt.Errorf("儲存上下文管理器失敗: %w", err))
+		}
 	}
 
 	// 關閉 SDK 執行器
 	if c.sdkExecutor != nil {
-		_ = c.sdkExecutor.Close()
+		if err := c.sdkExecutor.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("關閉 SDK 執行器失敗: %w", err))
+		}
 	}
 
 	c.closed = true
+
+	// 如果有錯誤，合併返回
+	if len(errs) > 0 {
+		var errMsg string
+		for i, err := range errs {
+			if i > 0 {
+				errMsg += "; "
+			}
+			errMsg += err.Error()
+		}
+		return fmt.Errorf("關閉客戶端時發生錯誤: %s", errMsg)
+	}
+
 	return nil
 }
 

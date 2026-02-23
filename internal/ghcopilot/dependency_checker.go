@@ -149,8 +149,13 @@ func (dc *DependencyChecker) isVersionValid(current, minimum string) bool {
 	minimumParts := strings.Split(minimum, ".")
 
 	for i := 0; i < len(currentParts) && i < len(minimumParts); i++ {
-		currentNum, _ := strconv.Atoi(currentParts[i])
-		minimumNum, _ := strconv.Atoi(minimumParts[i])
+		currentNum, err1 := strconv.Atoi(currentParts[i])
+		minimumNum, err2 := strconv.Atoi(minimumParts[i])
+		
+		// 如果版本號包含非數字，視為格式無效，返回 false
+		if err1 != nil || err2 != nil {
+			return false
+		}
 
 		if currentNum > minimumNum {
 			return true
@@ -175,7 +180,7 @@ func (dc *DependencyChecker) formatErrors() error {
 
 	output.WriteString("✅ 解決所有問題後，請重新運行本程式\n")
 
-	return fmt.Errorf("%s", output.String())
+	return fmt.Errorf("依賴檢查失敗:\n%s", output.String())
 }
 
 // GetErrors 取得所有檢查到的錯誤

@@ -620,15 +620,21 @@ func TestRetryPolicyBuilder_MustBuild_Success(t *testing.T) {
 }
 
 func TestRetryPolicyBuilder_MustBuild_Panic(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("MustBuild should panic for invalid config")
-		}
-	}()
-
-	NewRetryPolicyBuilder().
-		WithMaxAttempts(0).
+	// 測試無效配置時，MustBuild 應返回預設策略而不是 panic
+	policy := NewRetryPolicyBuilder().
+		WithMaxAttempts(0). // 無效配置
 		MustBuild()
+
+	// 應該返回預設策略
+	if policy == nil {
+		t.Error("MustBuild should return default policy for invalid config, not nil")
+	}
+	
+	// 驗證返回的是預設策略
+	defaultPolicy := DefaultRetryPolicy()
+	if policy.MaxAttempts != defaultPolicy.MaxAttempts {
+		t.Errorf("Expected default MaxAttempts %d, got %d", defaultPolicy.MaxAttempts, policy.MaxAttempts)
+	}
 }
 
 // ========================

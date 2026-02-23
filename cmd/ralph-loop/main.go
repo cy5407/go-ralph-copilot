@@ -125,6 +125,11 @@ func cmdRun(prompt string, maxLoops int, timeout time.Duration, workDir string, 
 	config.CircuitBreakerThreshold = 3
 	config.SameErrorThreshold = 5
 
+	// 傳遞靜默模式給環境變數（供 infoLog 使用）
+	if silent {
+		os.Setenv("RALPH_SILENT", "1")
+	}
+
 	// 建立客戶端
 	client := ghcopilot.NewRalphLoopClientWithConfig(config)
 	defer client.Close()

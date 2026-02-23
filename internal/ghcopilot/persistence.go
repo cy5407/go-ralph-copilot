@@ -216,16 +216,27 @@ func (pm *PersistenceManager) loadFromJSON(file *os.File) (*ContextManager, erro
 	// 重新構建 ContextManager
 	cm := NewContextManager()
 
+	// 驗證數據完整性
+	if data == nil || len(data) == 0 {
+		return nil, fmt.Errorf("加載的數據為空")
+	}
+
 	// 注意: 這是簡化版本，實際應用可能需要更完善的反序列化邏輯
 	if history, ok := data["history"].([]interface{}); ok {
+		loadedCount := 0
 		for _, item := range history {
 			if itemMap, ok := item.(map[string]interface{}); ok {
 				bytes, _ := json.Marshal(itemMap)
 				var ctx ExecutionContext
 				if err := json.Unmarshal(bytes, &ctx); err == nil {
 					cm.loopHistory = append(cm.loopHistory, &ctx)
+					loadedCount++
 				}
 			}
+		}
+		// 如果沒有成功加載任何歷史記錄，記錄警告
+		if len(history) > 0 && loadedCount == 0 {
+			return cm, fmt.Errorf("無法加載任何歷史記錄 (共 %d 條)", len(history))
 		}
 	}
 

@@ -469,11 +469,13 @@ func (b *RetryPolicyBuilder) Build() (*RetryPolicy, error) {
 	return b.policy.Clone(), nil
 }
 
-// MustBuild 建立重試策略，若失敗則 panic
+// MustBuild 建立重試策略，若失敗則記錄錯誤並返回預設策略
+// 注意：此方法不會 panic，而是返回安全的預設配置
 func (b *RetryPolicyBuilder) MustBuild() *RetryPolicy {
 	policy, err := b.Build()
 	if err != nil {
-		panic(err)
+		// 返回安全的預設重試策略（不 panic）
+		return DefaultRetryPolicy()
 	}
 	return policy
 }

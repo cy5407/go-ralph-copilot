@@ -39,8 +39,9 @@ Thumbs.db
 *.tmp
 *.temp
 
-# 狀態文件
-.call_count
+# 執行記錄（saves）
+.ralph-loop/
+**/.ralph-loop/
 .circuit_breaker_history
 .circuit_breaker_state
 .claude_session_id
