@@ -162,6 +162,20 @@ func DefaultClientConfig() *ClientConfig {
 // 返回值：
 // - LoopResult: 迴圈執行結果
 // - error: 執行過程中的錯誤
+// ralphStatusInstruction 是自動附加到每個 prompt 的結構化輸出要求
+const ralphStatusInstruction = `
+
+完成所有任務後，必須在回應最後輸出以下格式（這是必要的，否則系統無法知道任務已完成）：
+---RALPH_STATUS---
+EXIT_SIGNAL: true
+REASON: <完成原因>
+---END_RALPH_STATUS---
+若任務尚未完成或仍需繼續，輸出：
+---RALPH_STATUS---
+EXIT_SIGNAL: false
+REASON: <還需要做什麼>
+---END_RALPH_STATUS---`
+
 func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*LoopResult, error) {
 	if !c.initialized {
 		return nil, fmt.Errorf("client not initialized")
@@ -169,6 +183,9 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 	if c.closed {
 		return nil, fmt.Errorf("client is closed")
 	}
+
+	// 自動附加結構化輸出要求
+	prompt = prompt + ralphStatusInstruction
 
 	// 檢查熔斷器
 	if c.breaker.IsOpen() {
@@ -213,13 +230,19 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 	if !usedSDK {
 		result, err := c.executor.ExecutePrompt(ctx, prompt)
 		if err != nil {
+			// context.Canceled = 使用者中斷（Ctrl+C），立刻停止
+			// context.DeadlineExceeded = 總逾時，立刻停止
+			if ctx.Err() != nil {
+				execCtx.ExitReason = fmt.Sprintf("已中斷: %v", ctx.Err())
+				execCtx.ShouldContinue = false
+				return c.createResult(execCtx, false), nil
+			}
 			c.breaker.RecordSameError(err.Error())
 			if executionErr != nil {
 				execCtx.ExitReason = fmt.Sprintf("執行失敗 (SDK: %v, CLI: %v)", executionErr, err)
 			} else {
 				execCtx.ExitReason = fmt.Sprintf("CLI 執行失敗: %v", err)
 			}
-			// CLI 失敗應繼續下一迴圈，而非停止（避免誤判為完成）
 			execCtx.ShouldContinue = true
 			return c.createResult(execCtx, true), nil
 		}
@@ -229,9 +252,12 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 		execCtx.CLIOutput = result.Stdout
 		execCtx.CLIExitCode = result.ExitCode
 
-		if result.ExitCode != 0 {
-			c.breaker.RecordSameError(fmt.Sprintf("exit code %d", result.ExitCode))
-			execCtx.ExitReason = fmt.Sprintf("CLI 退出碼 %d，繼續重試", result.ExitCode)
+		// exit code != 0 但有輸出（例如 CLI 內部超時但 Copilot 已完成）
+		// 先走正常解析流程，讓 ResponseAnalyzer 判斷是否完成
+		if result.ExitCode != 0 && strings.TrimSpace(result.Stdout) == "" {
+			// 完全沒有輸出才算真正失敗
+			c.breaker.RecordSameError(fmt.Sprintf("exit code %d, no output", result.ExitCode))
+			execCtx.ExitReason = fmt.Sprintf("CLI 退出碼 %d（無輸出），繼續重試", result.ExitCode)
 			execCtx.ShouldContinue = true
 			return c.createResult(execCtx, true), nil
 		}
