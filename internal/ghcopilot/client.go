@@ -162,19 +162,17 @@ func DefaultClientConfig() *ClientConfig {
 // 返回值：
 // - LoopResult: 迴圈執行結果
 // - error: 執行過程中的錯誤
-// ralphStatusInstruction 是自動附加到每個 prompt 的結構化輸出要求
-const ralphStatusInstruction = `
-
-完成所有任務後，必須在回應最後輸出以下格式（這是必要的，否則系統無法知道任務已完成）：
+// ralphStatusInstruction 是自動插入到每個 prompt 開頭的結構化輸出要求
+// 放在開頭確保 Copilot 第一個讀到，不會被 skill 格式覆蓋
+const ralphStatusInstruction = `【系統要求】完成任務後，回應最後必須輸出以下格式，否則系統無法偵測完成狀態：
 ---RALPH_STATUS---
 EXIT_SIGNAL: true
 REASON: <完成原因>
 ---END_RALPH_STATUS---
-若任務尚未完成或仍需繼續，輸出：
----RALPH_STATUS---
-EXIT_SIGNAL: false
-REASON: <還需要做什麼>
----END_RALPH_STATUS---`
+若任務尚未完成，輸出 EXIT_SIGNAL: false。
+
+【任務】
+`
 
 func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*LoopResult, error) {
 	if !c.initialized {
@@ -184,8 +182,8 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 		return nil, fmt.Errorf("client is closed")
 	}
 
-	// 自動附加結構化輸出要求
-	prompt = prompt + ralphStatusInstruction
+	// 把格式要求放在 prompt 前面（系統要求優先）
+	prompt = ralphStatusInstruction + prompt
 
 	// 檢查熔斷器
 	if c.breaker.IsOpen() {
