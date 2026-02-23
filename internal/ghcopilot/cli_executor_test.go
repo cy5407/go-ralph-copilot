@@ -243,9 +243,9 @@ func TestBuildArgs(t *testing.T) {
 		t.Error("參數應包含 -s")
 	}
 
-	// 檢查允許所有工具
-	if !containsFlag(args, "--allow-all-tools") {
-		t.Error("參數應包含 --allow-all-tools")
+	// 檢查允許所有工具（現在改用 --yolo）
+	if !containsFlag(args, "--yolo") {
+		t.Error("參數應包含 --yolo")
 	}
 
 	// 檢查 no-ask-user

@@ -185,7 +185,7 @@ func (cb *CircuitBreaker) SaveState() error {
 		return fmt.Errorf("無法序列化狀態: %w", err)
 	}
 
-	return ioutil.WriteFile(cb.stateFile, jsonData, 0644)
+	return ioutil.WriteFile(cb.stateFile, jsonData, 0600)
 }
 
 // LoadState 從檔案載入狀態

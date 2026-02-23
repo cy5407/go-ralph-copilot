@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -24,8 +25,8 @@ type PersistenceManager struct {
 
 // NewPersistenceManager 建立新的持久化管理器
 func NewPersistenceManager(storageDir string, useGob bool) (*PersistenceManager, error) {
-	// 建立儲存目錄
-	if err := os.MkdirAll(storageDir, 0755); err != nil {
+	// 建立儲存目錄 (0750: 僅擁有者和群組可讀取)
+	if err := os.MkdirAll(storageDir, 0750); err != nil {
 		return nil, fmt.Errorf("無法建立儲存目錄: %w", err)
 	}
 
@@ -36,6 +37,28 @@ func NewPersistenceManager(storageDir string, useGob bool) (*PersistenceManager,
 	}, nil
 }
 
+// validatePath 驗證檔案路徑在允許的儲存目錄範圍內，防止路徑穿越攻擊
+func (pm *PersistenceManager) validatePath(filename string) error {
+	// 取得絕對路徑
+	absPath, err := filepath.Abs(filename)
+	if err != nil {
+		return fmt.Errorf("無法解析路徑: %w", err)
+	}
+	
+	// 取得儲存目錄的絕對路徑
+	absStorageDir, err := filepath.Abs(pm.storageDir)
+	if err != nil {
+		return fmt.Errorf("無法解析儲存目錄: %w", err)
+	}
+	
+	// 驗證路徑在儲存目錄範圍內
+	if !strings.HasPrefix(absPath, absStorageDir) {
+		return fmt.Errorf("路徑超出允許範圍: %s (允許: %s)", absPath, absStorageDir)
+	}
+	
+	return nil
+}
+
 // SaveContextManager 儲存整個上下文管理器到檔案
 func (pm *PersistenceManager) SaveContextManager(cm *ContextManager) error {
 	if cm == nil {
@@ -44,6 +67,7 @@ func (pm *PersistenceManager) SaveContextManager(cm *ContextManager) error {
 
 	filename := filepath.Join(pm.storageDir, "context_manager_"+time.Now().Format("20060102_150405")+pm.getExtension())
 
+	// #nosec G304 -- filename 由 filepath.Join 從 storageDir 構建，範圍受限
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("無法建立檔案: %w", err)
@@ -58,7 +82,11 @@ func (pm *PersistenceManager) SaveContextManager(cm *ContextManager) error {
 
 // LoadContextManager 從檔案載入上下文管理器
 func (pm *PersistenceManager) LoadContextManager(filename string) (*ContextManager, error) {
-	file, err := os.Open(filename)
+	if err := pm.validatePath(filename); err != nil {
+		return nil, err
+	}
+	
+	file, err := os.Open(filename) // #nosec G304 -- 路徑已透過 validatePath 驗證在 storageDir 範圍內
 	if err != nil {
 		return nil, fmt.Errorf("無法打開檔案: %w", err)
 	}
@@ -79,6 +107,7 @@ func (pm *PersistenceManager) SaveExecutionContext(ctx *ExecutionContext) error 
 
 	filename := filepath.Join(pm.storageDir, "loop_"+ctx.LoopID+pm.getExtension())
 
+	// #nosec G304 -- filename 由 filepath.Join 從 storageDir 構建，範圍受限
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("無法建立檔案: %w", err)
@@ -140,7 +169,7 @@ func (pm *PersistenceManager) ExportAsJSON(cm *ContextManager, outputPath string
 		return err
 	}
 
-	return os.WriteFile(outputPath, []byte(jsonStr), 0644)
+	return os.WriteFile(outputPath, []byte(jsonStr), 0600)
 }
 
 // ClearOldBackups 清理舊的備份檔案，只保留最新的 maxBackups 個
@@ -258,7 +287,11 @@ func (pm *PersistenceManager) loadFromGobData(file *os.File) (*ContextManager, e
 }
 
 func (pm *PersistenceManager) loadContextFromJSON(filename string) (*ExecutionContext, error) {
-	file, err := os.Open(filename)
+	if err := pm.validatePath(filename); err != nil {
+		return nil, err
+	}
+	
+	file, err := os.Open(filename) // #nosec G304 -- 路徑已透過 validatePath 驗證在 storageDir 範圍內
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +307,11 @@ func (pm *PersistenceManager) loadContextFromJSON(filename string) (*ExecutionCo
 }
 
 func (pm *PersistenceManager) loadContextFromGob(filename string) (*ExecutionContext, error) {
-	file, err := os.Open(filename)
+	if err := pm.validatePath(filename); err != nil {
+		return nil, err
+	}
+	
+	file, err := os.Open(filename) // #nosec G304 -- 路徑已透過 validatePath 驗證在 storageDir 範圍內
 	if err != nil {
 		return nil, err
 	}

@@ -137,6 +137,7 @@ func (p *RetryPolicy) NextWaitDuration(attempt int) time.Duration {
 	// 添加隨機抖動
 	if p.Jitter && p.JitterFactor > 0 {
 		jitterRange := float64(delay) * p.JitterFactor
+		// #nosec G404 -- retry jitter 僅用於避免請求同步，不涉及安全敏感用途
 		jitter := time.Duration(rand.Float64() * jitterRange)
 		delay += jitter
 	}

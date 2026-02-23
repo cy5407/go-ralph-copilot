@@ -253,7 +253,7 @@ func (ed *ExitDetector) SaveSignals() error {
 		return fmt.Errorf("無法序列化訊號: %w", err)
 	}
 
-	return ioutil.WriteFile(ed.signalFile, jsonData, 0644)
+	return ioutil.WriteFile(ed.signalFile, jsonData, 0600)
 }
 
 // LoadSignals 從檔案載入訊號

@@ -153,24 +153,19 @@ func (ce *CLIExecutor) buildArgs(prompt string) []string {
 		args = append(args, "-s")
 	}
 
-	// 權限控制
-	if ce.options.AllowAllTools {
-		args = append(args, "--allow-all-tools")
-		// 明確允許 write（Edit 工具）和 shell 執行，避免被誤拒
-		args = append(args, "--allow-tool", "write")
-		args = append(args, "--allow-tool", "shell")
-	}
-	if ce.options.AllowAllPaths {
-		args = append(args, "--allow-all-paths")
-	}
-	if ce.options.AllowAllURLs {
-		args = append(args, "--allow-all-urls")
+	// 權限控制：使用 --yolo 一次開放所有權限（等同 --allow-all-tools --allow-all-paths --allow-all-urls）
+	// 這是官方推薦的自動化腳本用法，比個別旗標更可靠
+	if ce.options.AllowAllTools || ce.options.AllowAllPaths || ce.options.AllowAllURLs {
+		args = append(args, "--yolo")
 	}
 
 	// 自主模式
 	if ce.options.NoAskUser {
 		args = append(args, "--no-ask-user")
 	}
+
+	// 防止 Copilot 自動讀取 AGENTS.md / .claude/ 等指令檔，避免任務跑偏
+	args = append(args, "--no-custom-instructions")
 
 	// 禁用平行執行
 	if ce.options.DisableParallel {
