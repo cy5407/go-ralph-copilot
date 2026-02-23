@@ -66,6 +66,8 @@ func DefaultOptions() ExecutorOptions {
 		Model:         ModelClaudeSonnet45,
 		Silent:        true, // 預設安靜模式，減少輸出
 		AllowAllTools: true, // 預設允許所有工具，適合自動化
+		AllowAllPaths: true, // 預設允許所有路徑存取，避免 shell 工具被拒
+		AllowAllURLs:  true, // 預設允許所有 URL 存取，避免網路工具被拒
 		NoAskUser:     true, // 預設自主模式
 	}
 }
@@ -393,6 +395,7 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 	defer cancel()
 
 	// 建立指令
+	// #nosec G204 -- args 已透過 buildArgs() 組裝，參數經過引號處理，無 shell injection 風險
 	cmd := exec.CommandContext(execCtx, "copilot", args...)
 	cmd.Dir = ce.workDir
 
