@@ -156,6 +156,9 @@ func (ce *CLIExecutor) buildArgs(prompt string) []string {
 	// 權限控制
 	if ce.options.AllowAllTools {
 		args = append(args, "--allow-all-tools")
+		// 明確允許 write（Edit 工具）和 shell 執行，避免被誤拒
+		args = append(args, "--allow-tool", "write")
+		args = append(args, "--allow-tool", "shell")
 	}
 	if ce.options.AllowAllPaths {
 		args = append(args, "--allow-all-paths")
@@ -399,11 +402,9 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 	cmd := exec.CommandContext(execCtx, "copilot", args...)
 	cmd.Dir = ce.workDir
 
-	// 設定環境變數 - 強制非交互式模式
+	// 設定環境變數
 	envVars := []string{
 		fmt.Sprintf("REQUEST_ID=%s", ce.requestID),
-		"COPILOT_NONINTERACTIVE=1",           // 防止交互式提示
-		"GITHUB_COPILOT_CLI_SKIP_PROMPTS=1", // 跳過所有提示
 	}
 
 	// 如果啟用除錯模式，添加 copilot 除錯環境變數
