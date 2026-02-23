@@ -22,6 +22,7 @@ func main() {
 	runPrompt := runCmd.String("prompt", "", "初始提示 (必填)")
 	runMaxLoops := runCmd.Int("max-loops", 10, "最大迴圈次數")
 	runTimeout := runCmd.Duration("timeout", 5*time.Minute, "總執行逾時")
+	runCLITimeout := runCmd.Duration("cli-timeout", 3*time.Minute, "單次 Copilot CLI 執行逾時（預設 3 分鐘）")
 	runWorkDir := runCmd.String("workdir", ".", "工作目錄")
 	runSilent := runCmd.Bool("silent", false, "靜默模式")
 
@@ -43,23 +44,27 @@ func main() {
 
 	switch os.Args[1] {
 	case "run":
+		// #nosec G104 -- FlagSet 使用 ExitOnError，Parse 失敗會自動 os.Exit(2)
 		runCmd.Parse(os.Args[2:])
 		if *runPrompt == "" {
 			fmt.Println("錯誤: -prompt 為必填參數")
 			runCmd.Usage()
 			os.Exit(1)
 		}
-		cmdRun(*runPrompt, *runMaxLoops, *runTimeout, *runWorkDir, *runSilent)
+		cmdRun(*runPrompt, *runMaxLoops, *runTimeout, *runCLITimeout, *runWorkDir, *runSilent)
 
 	case "status":
+		// #nosec G104 -- FlagSet 使用 ExitOnError，Parse 失敗會自動 os.Exit(2)
 		statusCmd.Parse(os.Args[2:])
 		cmdStatus(*statusWorkDir)
 
 	case "reset":
+		// #nosec G104 -- FlagSet 使用 ExitOnError，Parse 失敗會自動 os.Exit(2)
 		resetCmd.Parse(os.Args[2:])
 		cmdReset(*resetWorkDir)
 
 	case "watch":
+		// #nosec G104 -- FlagSet 使用 ExitOnError，Parse 失敗會自動 os.Exit(2)
 		watchCmd.Parse(os.Args[2:])
 		cmdWatch(*watchWorkDir, *watchInterval)
 
@@ -107,7 +112,7 @@ func printUsage() {
 `, Version)
 }
 
-func cmdRun(prompt string, maxLoops int, timeout time.Duration, workDir string, silent bool) {
+func cmdRun(prompt string, maxLoops int, timeout time.Duration, cliTimeout time.Duration, workDir string, silent bool) {
 	fmt.Println("========================================")
 	fmt.Println("  Ralph Loop - 自動程式碼迭代系統")
 	fmt.Println("========================================")
@@ -121,12 +126,14 @@ func cmdRun(prompt string, maxLoops int, timeout time.Duration, workDir string, 
 	config := ghcopilot.DefaultClientConfig()
 	config.WorkDir = workDir
 	config.Silent = silent
+	config.CLITimeout = cliTimeout
 	config.CLIMaxRetries = 3
 	config.CircuitBreakerThreshold = 3
 	config.SameErrorThreshold = 5
 
 	// 傳遞靜默模式給環境變數（供 infoLog 使用）
 	if silent {
+		// #nosec G104 -- Setenv 失敗不影響核心邏輯，僅影響日誌顯示
 		os.Setenv("RALPH_SILENT", "1")
 	}
 

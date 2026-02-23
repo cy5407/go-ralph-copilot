@@ -135,7 +135,7 @@ func NewRalphLoopClientWithConfig(config *ClientConfig) *RalphLoopClient {
 // DefaultClientConfig 傳回預設的配置
 func DefaultClientConfig() *ClientConfig {
 	return &ClientConfig{
-		CLITimeout:              60 * time.Second, // 增加到 60 秒以支援複雜任務
+		CLITimeout:              3 * time.Minute, // 預設 3 分鐘，應對複雜任務
 		CLIMaxRetries:           3,
 		MaxHistorySize:          100,
 		SaveDir:                 ".ralph-loop/saves",
@@ -219,7 +219,9 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 			} else {
 				execCtx.ExitReason = fmt.Sprintf("CLI 執行失敗: %v", err)
 			}
-			return c.createResult(execCtx, false), nil
+			// CLI 失敗應繼續下一迴圈，而非停止（避免誤判為完成）
+			execCtx.ShouldContinue = true
+			return c.createResult(execCtx, true), nil
 		}
 
 		output = result.Stdout
@@ -229,14 +231,15 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 
 		if result.ExitCode != 0 {
 			c.breaker.RecordSameError(fmt.Sprintf("exit code %d", result.ExitCode))
-			execCtx.ExitReason = fmt.Sprintf("CLI 執行失敗，退出碼 %d", result.ExitCode)
-			execCtx.ShouldContinue = false
-			return c.createResult(execCtx, false), nil
+			execCtx.ExitReason = fmt.Sprintf("CLI 退出碼 %d，繼續重試", result.ExitCode)
+			execCtx.ShouldContinue = true
+			return c.createResult(execCtx, true), nil
 		}
 	}
 
 	// 解析輸出
 	parser := NewOutputParser(output)
+	// #nosec G104 -- Parse 僅解析輸出，失敗不影響繼續執行
 	parser.Parse()
 	codeBlocks := parser.GetOptions()
 
@@ -592,9 +595,11 @@ func (c *RalphLoopClient) RecoverFromBackup(filename string) error {
 	// 清空當前歷史並添加恢復的上下文
 	c.contextManager.Clear()
 	c.contextManager.StartLoop(execCtx.LoopIndex, execCtx.UserPrompt)
+	// #nosec G104 -- UpdateCurrentLoop 僅更新內部狀態，失敗時會在日誌中記錄
 	c.contextManager.UpdateCurrentLoop(func(ctx *ExecutionContext) {
 		*ctx = *execCtx
 	})
+	// #nosec G104 -- FinishLoop 僅更新時間戳記，失敗不影響核心流程
 	c.contextManager.FinishLoop()
 
 	return nil

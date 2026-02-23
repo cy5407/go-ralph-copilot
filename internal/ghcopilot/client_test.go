@@ -25,8 +25,8 @@ func TestNewRalphLoopClient(t *testing.T) {
 // TestDefaultClientConfig 測試預設配置
 func TestDefaultClientConfig(t *testing.T) {
 	config := DefaultClientConfig()
-	if config.CLITimeout != 60*time.Second {
-		t.Errorf("預設逾時應為 60s，但為 %v", config.CLITimeout)
+	if config.CLITimeout != 3*time.Minute {
+		t.Errorf("預設逾時應為 3m，但為 %v", config.CLITimeout)
 	}
 	if config.CLIMaxRetries != 3 {
 		t.Errorf("預設重試應為 3，但為 %d", config.CLIMaxRetries)
