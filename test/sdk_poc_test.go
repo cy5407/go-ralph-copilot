@@ -1,6 +1,7 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -42,7 +43,7 @@ func TestSDKBasicConnection(t *testing.T) {
 	// 使用 goroutine 和 channel 來設定超時
 	errChan := make(chan error, 1)
 	go func() {
-		errChan <- client.Start()
+		errChan <- client.Start(context.Background())
 	}()
 
 	select {
@@ -57,15 +58,15 @@ func TestSDKBasicConnection(t *testing.T) {
 
 	defer func() {
 		t.Log("停止 SDK 客戶端...")
-		errs := client.Stop()
-		if len(errs) > 0 {
-			t.Logf("停止時發生錯誤: %v", errs)
+		err := client.Stop()
+		if err != nil {
+			t.Logf("停止時發生錯誤: %v", err)
 		}
 	}()
 
 	// 測試 Ping
 	t.Log("測試 Ping...")
-	pong, err := client.Ping("test")
+	pong, err := client.Ping(context.Background(), "test")
 	if err != nil {
 		t.Fatalf("Ping 失敗: %v", err)
 	}
@@ -95,7 +96,7 @@ func TestSDKSessionCreation(t *testing.T) {
 	})
 
 	t.Log("開始啟動 SDK 客戶端...")
-	err := client.Start()
+	err := client.Start(context.Background())
 	if err != nil {
 		t.Fatalf("啟動 SDK 客戶端失敗: %v\n提示: 請確保已安裝新版 Copilot CLI (winget install GitHub.Copilot)", err)
 	}
@@ -104,7 +105,7 @@ func TestSDKSessionCreation(t *testing.T) {
 	t.Log("✅ SDK 客戶端已啟動")
 
 	t.Log("建立 Session...")
-	session, err := client.CreateSession(&copilot.SessionConfig{
+	session, err := client.CreateSession(context.Background(), &copilot.SessionConfig{
 		Model: "gpt-4",
 	})
 

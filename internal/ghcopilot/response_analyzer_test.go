@@ -106,9 +106,9 @@ func TestDetectStuckState(t *testing.T) {
 
 // TestDualConditionVerification 測試完成偵測邏輯
 func TestDualConditionVerification(t *testing.T) {
-	// 自然語言分數夠高（≥ 20 + 至少 1 個指標）→ 應視為完成
-	// "完成" = +10（完成關鍵字）, 長度 < 500 = +10（短輸出）→ 20 分 + 2 指標
-	response1 := "完成\n完成\n完成"
+	// 自然語言分數夠高（≥ 30 + 至少 2 個指標）→ 應視為完成
+	// "完成" = +10（完成關鍵字）, "沒有更多工作" = +15（no_work）, 長度 < 500 = +10（短輸出）→ 35 分 + 3 指標
+	response1 := "完成\n沒有更多工作"
 	ra1 := NewResponseAnalyzer(response1)
 	ra1.CalculateCompletionScore()
 
@@ -148,8 +148,8 @@ EXIT_SIGNAL: true
 		t.Error("兩個條件都滿足應視為完成")
 	}
 
-	// Markdown 格式不影響偵測：**無需 push** 應被識別
-	response4 := "目前分支與 origin/master **已同步**（**無需 push**）"
+	// Markdown 格式不影響偵測：**無需 push** + 完成 → score ≥ 30
+	response4 := "已完成。目前分支與 origin/master **已同步**（**無需 push**）"
 	ra4 := NewResponseAnalyzer(response4)
 	ra4.CalculateCompletionScore()
 
