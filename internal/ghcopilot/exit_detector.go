@@ -3,7 +3,7 @@ package ghcopilot
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -253,7 +253,7 @@ func (ed *ExitDetector) SaveSignals() error {
 		return fmt.Errorf("無法序列化訊號: %w", err)
 	}
 
-	return ioutil.WriteFile(ed.signalFile, jsonData, 0600)
+	return os.WriteFile(ed.signalFile, jsonData, 0600)
 }
 
 // LoadSignals 從檔案載入訊號
@@ -261,7 +261,7 @@ func (ed *ExitDetector) LoadSignals() error {
 	ed.mu.Lock()
 	defer ed.mu.Unlock()
 
-	data, err := ioutil.ReadFile(ed.signalFile)
+	data, err := os.ReadFile(ed.signalFile)
 	if err != nil {
 		return nil // 檔案不存在是正常的
 	}
