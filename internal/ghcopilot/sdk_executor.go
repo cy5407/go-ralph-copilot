@@ -162,6 +162,11 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 		return "", fmt.Errorf("sdk executor not healthy")
 	}
 
+	// 防禦：client 必須是真實連線，否則 CreateSession 會 panic
+	if e.client == nil {
+		return "", fmt.Errorf("sdk executor: client not initialized, call Start() first")
+	}
+
 	startTime := time.Now()
 	e.metrics.TotalCalls++
 
