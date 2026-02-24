@@ -104,15 +104,25 @@ func TestDetectStuckState(t *testing.T) {
 	}
 }
 
-// TestDualConditionVerification 測試雙重條件驗證
+// TestDualConditionVerification 測試完成偵測邏輯
 func TestDualConditionVerification(t *testing.T) {
-	// 只有分數，無 EXIT_SIGNAL
+	// 自然語言分數夠高（≥ 20 + 至少 1 個指標）→ 應視為完成
+	// "完成" = +10（完成關鍵字）, 長度 < 500 = +10（短輸出）→ 20 分 + 2 指標
 	response1 := "完成\n完成\n完成"
 	ra1 := NewResponseAnalyzer(response1)
 	ra1.CalculateCompletionScore()
 
-	if ra1.IsCompleted() {
-		t.Error("只有分數沒有 EXIT_SIGNAL 不應視為完成")
+	if !ra1.IsCompleted() {
+		t.Errorf("自然語言分數 %d + %d 個指標應視為完成", ra1.completionScore, len(ra1.completionIndicators))
+	}
+
+	// 分數不夠（只有一個弱指標，< 20 分）→ 不應視為完成
+	response1b := "這是一段很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長很長的普通回覆，沒有任何完成或結束的跡象在裡面"
+	ra1b := NewResponseAnalyzer(response1b)
+	ra1b.CalculateCompletionScore()
+
+	if ra1b.IsCompleted() {
+		t.Errorf("無完成跡象不應視為完成，但分數=%d 指標=%d", ra1b.completionScore, len(ra1b.completionIndicators))
 	}
 
 	// EXIT_SIGNAL=true 單獨就夠，不需要分數
@@ -136,6 +146,15 @@ EXIT_SIGNAL: true
 
 	if !ra3.IsCompleted() {
 		t.Error("兩個條件都滿足應視為完成")
+	}
+
+	// Markdown 格式不影響偵測：**無需 push** 應被識別
+	response4 := "目前分支與 origin/master **已同步**（**無需 push**）"
+	ra4 := NewResponseAnalyzer(response4)
+	ra4.CalculateCompletionScore()
+
+	if !ra4.IsCompleted() {
+		t.Errorf("Markdown 格式的「無需 push」應被識別，但分數=%d 指標=%v", ra4.completionScore, ra4.completionIndicators)
 	}
 }
 
