@@ -3,6 +3,7 @@ package ghcopilot
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -163,14 +164,23 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 	startTime := time.Now()
 	e.metrics.TotalCalls++
 
-	// 建立會話，自動允許所有工具呼叫
-	session, err := e.client.CreateSession(ctx, &copilot.SessionConfig{
+	// 使用 CLI timeout 建立子 context
+	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
+	defer cancel()
+
+	// 建立會話，自動允許所有工具呼叫並顯示進度
+	session, err := e.client.CreateSession(execCtx, &copilot.SessionConfig{
 		Hooks: &copilot.SessionHooks{
-			// 自動允許所有工具（解決 Permission denied 問題）
+			// 顯示工具名稱並自動允許（解決 Permission denied 問題）
 			OnPreToolUse: func(input copilot.PreToolUseHookInput, inv copilot.HookInvocation) (*copilot.PreToolUseHookOutput, error) {
+				fmt.Printf("● %s\n", input.ToolName)
 				return &copilot.PreToolUseHookOutput{
 					PermissionDecision: "allow",
 				}, nil
+			},
+			OnPostToolUse: func(input copilot.PostToolUseHookInput, inv copilot.HookInvocation) (*copilot.PostToolUseHookOutput, error) {
+				fmt.Printf("  └ 完成\n")
+				return &copilot.PostToolUseHookOutput{}, nil
 			},
 		},
 		OnUserInputRequest: func(req copilot.UserInputRequest, inv copilot.UserInputInvocation) (copilot.UserInputResponse, error) {
@@ -187,15 +197,35 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 	}
 	defer session.Destroy()
 
+	// 訂閱事件顯示 AI 串流回應
+	var assistantContent strings.Builder
+	session.On(func(event copilot.SessionEvent) {
+		switch event.Type {
+		case "assistant.message_delta":
+			if event.Data.Content != nil {
+				fmt.Print(*event.Data.Content)
+				assistantContent.WriteString(*event.Data.Content)
+			}
+		case "assistant.message":
+			// 非串流模式的最終訊息
+			if event.Data.Content != nil && assistantContent.Len() == 0 {
+				fmt.Println(*event.Data.Content)
+				assistantContent.WriteString(*event.Data.Content)
+			}
+		}
+	})
+
 	// 傳送訊息並等待完成
-	event, err := session.SendAndWait(ctx, copilot.MessageOptions{Prompt: prompt})
+	event, err := session.SendAndWait(execCtx, copilot.MessageOptions{Prompt: prompt})
 	if err != nil {
 		e.metrics.FailedCalls++
 		return "", fmt.Errorf("sdk execute failed: %w", err)
 	}
+	fmt.Println() // 確保串流後換行
 
-	var result string
-	if event != nil && event.Data.Content != nil {
+	// 優先用收集到的串流內容，否則用最後事件
+	result := assistantContent.String()
+	if result == "" && event != nil && event.Data.Content != nil {
 		result = *event.Data.Content
 	}
 
