@@ -68,7 +68,7 @@ func DefaultOptions() ExecutorOptions {
 		AllowAllTools: true, // 預設允許所有工具，適合自動化
 		AllowAllPaths: true, // 預設允許所有路徑存取，避免 shell 工具被拒
 		AllowAllURLs:  true, // 預設允許所有 URL 存取，避免網路工具被拒
-		NoAskUser:     true, // 預設自主模式
+		// NoAskUser 移除：與 --yolo 衝突，--no-ask-user 會讓 Edit 工具直接拒絕而非自動核准
 	}
 }
 
