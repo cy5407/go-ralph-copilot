@@ -71,22 +71,38 @@ TypeScript SDK 不受影響，因為 `@github/copilot` npm 包**自動內嵌** v
 
 ### 未來重新啟用條件（擇一）
 
-**方案 A：等 Go SDK 更新**（被動）  
+**方案 A：等 Go SDK 更新**（被動，零工作量）  
 等 SDK 移除 `--headless` flag，相容 v0.0.415+。
 
-**方案 B：使用 `go tool bundler` 內嵌舊版 CLI**（主動）
+**方案 B：`CLIPath` 指定舊版 CLI**（最簡單，官方支援）  
+先取得支援 `--headless` 的舊版 binary（v0.0.403，可從 TypeScript SDK npm 包解壓）：
 ```bash
-# 1. 取得支援 --headless 的 CLI binary（例如從 @github/copilot@0.0.403 npm 包解壓）
+npm pack @github/copilot@0.0.403
+# 解壓後取出 bin/copilot.exe
+```
+然後在 `sdk_executor.go` 的 `NewClient` 呼叫時加入 `CLIPath`：
+```go
+client := copilot.NewClient(&copilot.ClientOptions{
+    CLIPath: "/path/to/copilot-v0.0.403.exe",
+})
+```
+或透過環境變數（不需改程式碼）：
+```bash
+COPILOT_CLI_PATH=C:\tools\copilot-v0.0.403.exe ./ralph-loop.exe run ...
+```
+
+**方案 C：使用 `go tool bundler` 內嵌舊版 CLI**（官方推薦，適合 CI/CD）
+```bash
+# 1. 取得 binary（同方案 B 的 npm pack 步驟）
 # 2. 安裝 bundler
 go get -tool github.com/github/copilot-sdk/go/cmd/bundler
 # 3. 執行 bundler（在 build 前）
 go tool bundler
-# 4. 在程式啟動時呼叫 Setup
-embeddedcli.Setup(embeddedcli.Config{Cli: cliReader, CliHash: hash})
-# 5. 重新啟用
+# 4. 重新啟用
 config.EnableSDK = true
 config.PreferSDK = true
 ```
+bundler 會自動呼叫 `embeddedcli.Setup()`，無需手動處理。
 
 ---
 
