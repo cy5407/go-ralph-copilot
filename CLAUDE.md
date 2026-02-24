@@ -8,9 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 專案概述
 
-Ralph Loop 是一個 AI 驅動的自動程式碼迭代系統，基於 GitHub Copilot CLI 實現「觀察→反思→行動」的自主修正迴圈。
+Ralph Loop 是一個 AI 驅動的自動程式碼迭代系統，以 **GitHub Copilot SDK（主要）+ CLI（回退）** 實現「觀察→反思→行動」的自主修正迴圈。
 
-**核心概念**：透過 GitHub Copilot CLI 分析編譯錯誤或測試失敗，自動生成修復方案並持續迭代，直到問題解決或達到預設的安全限制。
+**核心概念**：透過 GitHub Copilot SDK v0.1.26 分析任務與執行工具，自動生成修復方案並持續迭代，直到問題解決或達到預設的安全限制。
 
 ## 開發命令
 
@@ -72,9 +72,12 @@ COPILOT_MOCK_MODE=true ./ralph-loop.exe run -prompt "測試" -max-loops 3
     ↓
 [迴圈 N] RalphLoopClient.ExecuteLoop()
     ↓
-├─ CLIExecutor → 呼叫 `copilot -p "prompt"`
-│   └─ 重試機制（最多 3 次）
-│   └─ 超時控制（預設 60 秒）
+├─ SDKExecutor（主要）→ Copilot SDK v0.1.26
+│   ├─ SendAndWait + 事件串流顯示工具執行
+│   └─ OnPermissionRequest: ApproveAll（自動授權）
+│
+├─ CLIExecutor（回退，SDK 失敗時）
+│   └─ 呼叫 `copilot -p "prompt"`
 │
 ├─ OutputParser → 解析 Copilot 輸出
 │   └─ 提取程式碼區塊
@@ -100,14 +103,15 @@ COPILOT_MOCK_MODE=true ./ralph-loop.exe run -prompt "測試" -max-loops 3
 **`internal/ghcopilot/`** - GitHub Copilot 整合層
 
 - `client.go` - **主要 API 入口點**，`RalphLoopClient` 整合所有模組
-- `cli_executor.go` - 執行 `copilot` CLI 命令，處理超時與重試
+- `sdk_executor.go` - **GitHub Copilot SDK 執行器（主要）**，SendAndWait + 事件串流
+- `cli_executor.go` - GitHub Copilot CLI 執行器（SDK 失敗時回退）
 - `output_parser.go` - 解析 Copilot 輸出（程式碼區塊、選項）
 - `response_analyzer.go` - 判斷是否應繼續或退出迴圈
 - `circuit_breaker.go` - 防止無限迴圈的安全機制
 - `context.go` - 管理迴圈歷史與上下文累積
 - `persistence.go` - 儲存/載入執行記錄
-- `exit_detector.go` - 優雅退出決策（雙重條件驗證）
-- `sdk_executor.go` - GitHub Copilot SDK 整合（備用執行器）
+- `exit_detector.go` - 優雅退出決策（EXIT_SIGNAL 單獨就夠，備用 score ≥ 30）
+- `cli_executor.go` - GitHub Copilot CLI 執行器（SDK 失敗時回退）
 
 **`cmd/ralph-loop/main.go`** - CLI 入口
 
@@ -142,10 +146,12 @@ opts.NoAskUser = true           // 自主模式（不詢問使用者）
 
 系統透過以下方式判斷任務是否完成：
 
-1. **關鍵字檢測** - 輸出包含 "完成", "成功", "✅", "PASS" 等
-2. **退出信號** - 結構化狀態中 `EXIT_SIGNAL: true`
-3. **任務進度** - `TASKS_DONE: X/X` 且 X 相同
-4. **熔斷器** - 無進展或重複錯誤達閾值
+1. **結構化退出信號**（最可靠，單獨就夠）
+   - `---RALPH_STATUS---` 區塊中 `EXIT_SIGNAL: true`
+   - `REASON:` 欄位說明退出原因
+2. **自然語言備用**（score ≥ 30 + 至少 2 個指標）
+   - 關鍵字：「完成」、「沒有更多工作」等
+3. **熔斷器** - 無進展或重複錯誤達閾值
 
 ## 常見問題處理
 

@@ -38,7 +38,7 @@ Ralph Loop 是一個參考了Ralph-Loop，想拿來在Copilot上仿造的 AI 驅
 ### 核心技術
 
 - **語言**: Go 1.24.5
-- **AI 整合**: GitHub Copilot SDK (v0.1.15-preview.0)
+- **AI 整合**: GitHub Copilot SDK (v0.1.26)
 - **架構**: 雙執行器（SDK + CLI）+ 智能模式選擇
 - **測試**: 351 個測試，93% 覆蓋率
 
@@ -232,9 +232,7 @@ ralph-loop/
 │   └── ...
 ├── test/                        # 整合測試
 │   └── sdk_poc_test.go
-├── docs/                        # 專案文檔
-│   ├── INDEX.md                 # 文檔導航
-│   └── active/                  # 實用文檔
+├── 過期文件/                    # 已完成/已取代的歷史文件
 ├── .ralph-loop/                 # 執行時資料
 │   └── saves/                   # 執行歷史保存
 ├── go.mod                       # Go 模組定義
@@ -262,10 +260,9 @@ config.PreferSDK = true                   // 優先使用 SDK
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - 系統架構說明
 - **[CLAUDE.md](CLAUDE.md)** - Claude Code 開發指南
-- **[IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md)** - 階段 8 完成報告
-- **[VERSION_NOTICE.md](VERSION_NOTICE.md)** - 版本資訊與遷移指南
-- **[docs/INDEX.md](docs/INDEX.md)** - 文檔導航索引
-- **[docs/active/](docs/active/)** - 實用文檔目錄
+- **[TECHNICAL_DEBT.md](TECHNICAL_DEBT.md)** - 技術債清單
+- **[NEXT_STEPS.md](NEXT_STEPS.md)** - 下一步待辦事項
+- **[過期文件/](過期文件/)** - 已完成/已取代的歷史文件
 
 ## 🔧 技術亮點
 
@@ -334,6 +331,14 @@ MIT License
 
 ## 📜 版本歷史
 
+### master (2026-02-24) - SDK 遷移與功能改進
+
+- ✅ 遷移至 GitHub Copilot SDK v0.1.26（主要執行方式）
+- ✅ 修復 Permission denied（`PermissionHandler.ApproveAll`）
+- ✅ 新增 `RALPH_STATUS` / `REASON` 欄位解析
+- ✅ 工具執行過程即時顯示（事件串流）
+- ✅ CLI 自動降級機制
+
 ### v0.1.0-stable (2026-02-14) 🎉
 
 **首個穩定版本發布**
@@ -357,7 +362,7 @@ MIT License
 
 ---
 
-**最後更新**: 2026-02-14  
-**當前穩定版本**: v0.1.0-stable  
-**狀態**: ✅ 已驗證可用（AI 正常執行，輸出顯示完整）
+**最後更新**: 2026-02-24  
+**當前穩定版本**: v0.1.0-stable（master 持續更新中）  
+**狀態**: ✅ 已驗證可用（SDK v0.1.26，Permission denied 已修復）
 
