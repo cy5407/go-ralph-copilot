@@ -10,6 +10,7 @@ type CopilotStatus struct {
 	Status     string
 	ExitSignal bool
 	TasksDone  string
+	Reason     string // REASON 欄位
 	RawBlock   string
 }
 
@@ -63,6 +64,8 @@ func (ra *ResponseAnalyzer) ParseStructuredOutput() *CopilotStatus {
 			status.ExitSignal = strings.ToLower(value) == "true"
 		} else if strings.HasPrefix(line, "TASKS_DONE:") {
 			status.TasksDone = strings.TrimSpace(strings.TrimPrefix(line, "TASKS_DONE:"))
+		} else if strings.HasPrefix(line, "REASON:") {
+			status.Reason = strings.TrimSpace(strings.TrimPrefix(line, "REASON:"))
 		}
 	}
 

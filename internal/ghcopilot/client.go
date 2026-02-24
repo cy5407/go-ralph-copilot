@@ -283,13 +283,24 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 	execCtx.CompletionScore = score
 	completed := analyzer.IsCompleted()
 
+	// 從 RALPH_STATUS 提取 REASON
+	statusBlock := analyzer.ParseStructuredOutput()
+
 	shouldContinue := !completed
 	execCtx.ShouldContinue = shouldContinue
 
 	if !shouldContinue {
 		c.breaker.RecordSuccess()
-		execCtx.ExitReason = "任務完成 (EXIT_SIGNAL=true)"
+		reason := "任務完成 (EXIT_SIGNAL=true)"
+		if statusBlock != nil && statusBlock.Reason != "" {
+			reason = statusBlock.Reason
+		}
+		execCtx.ExitReason = reason
 	} else {
+		// 設定繼續原因（從 RALPH_STATUS REASON 欄位取得）
+		if statusBlock != nil && statusBlock.Reason != "" {
+			execCtx.ExitReason = statusBlock.Reason
+		}
 		// 只在輸出與前一次迴圈完全相同時才記錄無進展（真正卡住）
 		history := c.contextManager.GetLoopHistory()
 		if len(history) > 0 && history[len(history)-1].CLIOutput == output {

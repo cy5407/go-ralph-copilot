@@ -2,6 +2,7 @@ package ghcopilot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -168,23 +169,20 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 	execCtx, cancel := context.WithTimeout(ctx, e.config.Timeout)
 	defer cancel()
 
-	// 建立會話，自動允許所有工具呼叫並顯示進度
+	// 建立會話
 	session, err := e.client.CreateSession(execCtx, &copilot.SessionConfig{
+		WorkingDirectory: e.config.WorkDir,
+		// 自動允許所有工具（解決 Permission denied 問題）
+		OnPermissionRequest: copilot.PermissionHandler.ApproveAll,
 		Hooks: &copilot.SessionHooks{
-			// 顯示工具名稱並自動允許（解決 Permission denied 問題）
+			// OnPreToolUse 也設 allow，確保 hook 層也通過
 			OnPreToolUse: func(input copilot.PreToolUseHookInput, inv copilot.HookInvocation) (*copilot.PreToolUseHookOutput, error) {
-				fmt.Printf("● %s\n", input.ToolName)
 				return &copilot.PreToolUseHookOutput{
 					PermissionDecision: "allow",
 				}, nil
 			},
-			OnPostToolUse: func(input copilot.PostToolUseHookInput, inv copilot.HookInvocation) (*copilot.PostToolUseHookOutput, error) {
-				fmt.Printf("  └ 完成\n")
-				return &copilot.PostToolUseHookOutput{}, nil
-			},
 		},
 		OnUserInputRequest: func(req copilot.UserInputRequest, inv copilot.UserInputInvocation) (copilot.UserInputResponse, error) {
-			// 自動回答用戶輸入請求
 			if len(req.Choices) > 0 {
 				return copilot.UserInputResponse{Answer: req.Choices[0], WasFreeform: false}, nil
 			}
@@ -197,17 +195,48 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 	}
 	defer session.Destroy()
 
-	// 訂閱事件顯示 AI 串流回應
+	// 訂閱事件顯示 AI 行為
 	var assistantContent strings.Builder
 	session.On(func(event copilot.SessionEvent) {
 		switch event.Type {
+		case copilot.ToolExecutionStart:
+			// 顯示工具名稱和參數摘要
+			toolName := ""
+			if event.Data.ToolName != nil {
+				toolName = *event.Data.ToolName
+			}
+			argSummary := formatToolArgs(event.Data.Arguments)
+			if argSummary != "" {
+				fmt.Printf("● %s\n  $ %s\n", toolName, argSummary)
+			} else {
+				fmt.Printf("● %s\n", toolName)
+			}
+		case copilot.ToolExecutionComplete:
+			// 顯示工具執行結果
+			success := event.Data.Success == nil || *event.Data.Success
+			if success {
+				fmt.Printf("  └ 完成\n")
+			} else {
+				errMsg := ""
+				if event.Data.Error != nil {
+					if event.Data.Error.ErrorClass != nil {
+						errMsg = event.Data.Error.ErrorClass.Message
+					} else if event.Data.Error.String != nil {
+						errMsg = *event.Data.Error.String
+					}
+				}
+				fmt.Printf("  └ ❌ 失敗: %s\n", errMsg)
+			}
+		case copilot.ToolExecutionProgress:
+			if event.Data.ProgressMessage != nil {
+				fmt.Printf("  … %s\n", *event.Data.ProgressMessage)
+			}
 		case "assistant.message_delta":
-			if event.Data.Content != nil {
-				fmt.Print(*event.Data.Content)
-				assistantContent.WriteString(*event.Data.Content)
+			if event.Data.DeltaContent != nil {
+				fmt.Print(*event.Data.DeltaContent)
+				assistantContent.WriteString(*event.Data.DeltaContent)
 			}
 		case "assistant.message":
-			// 非串流模式的最終訊息
 			if event.Data.Content != nil && assistantContent.Len() == 0 {
 				fmt.Println(*event.Data.Content)
 				assistantContent.WriteString(*event.Data.Content)
@@ -221,7 +250,7 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 		e.metrics.FailedCalls++
 		return "", fmt.Errorf("sdk execute failed: %w", err)
 	}
-	fmt.Println() // 確保串流後換行
+	fmt.Println()
 
 	// 優先用收集到的串流內容，否則用最後事件
 	result := assistantContent.String()
@@ -234,6 +263,36 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 	e.metrics.TotalDuration += duration
 
 	return result, nil
+}
+
+// formatToolArgs 從工具參數中提取摘要（最多 120 字元）
+func formatToolArgs(args interface{}) string {
+	if args == nil {
+		return ""
+	}
+	// 嘗試提取常見欄位
+	if m, ok := args.(map[string]interface{}); ok {
+		// 優先顯示 command / input / code / file_path / path
+		for _, key := range []string{"command", "input", "code", "file_path", "path", "query"} {
+			if v, ok := m[key]; ok {
+				s := fmt.Sprintf("%v", v)
+				if len(s) > 120 {
+					s = s[:117] + "..."
+				}
+				return s
+			}
+		}
+	}
+	// 退而求其次，轉 JSON 截斷
+	b, err := json.Marshal(args)
+	if err != nil {
+		return ""
+	}
+	s := string(b)
+	if len(s) > 120 {
+		s = s[:117] + "..."
+	}
+	return s
 }
 
 // Explain 執行代碼解釋
