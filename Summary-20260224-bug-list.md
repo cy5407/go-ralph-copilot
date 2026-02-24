@@ -86,6 +86,12 @@
 - **修法**：`process_windows.go` 用 `CREATE_NEW_PROCESS_GROUP` + `taskkill /F /T /PID`
 - **Commit**: `513805c`
 
+### Bug-17：Ctrl+C / 超時無法真正停止循環（死鎖）
+- **問題**：`killProcessTree` 在 `cmd.Run()` 返回後才執行，但 Copilot 子進程持有 stdout pipe，導致 `cmd.Run()` 永遠不返回（死鎖）
+- **影響**：按 Ctrl+C 後顯示「收到中斷信號，正在停止...」但 Copilot 繼續跑
+- **修法**：改用 `cmd.Start()` + 背景 goroutine 監控 `execCtx.Done()`，立即呼叫 `killProcessTree`，pipe 關閉後 `cmd.Wait()` 才能正常返回
+- **Commit**: `3c078e0`
+
 ---
 
 ## ❌ 未解決（待處理）
