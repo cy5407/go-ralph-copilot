@@ -211,10 +211,27 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 			} else {
 				fmt.Printf("● %s\n", toolName)
 			}
+		case copilot.ToolExecutionPartialResult:
+			// 顯示工具串流輸出
+			if event.Data.PartialOutput != nil && *event.Data.PartialOutput != "" {
+				fmt.Printf("  │ %s\n", *event.Data.PartialOutput)
+			}
 		case copilot.ToolExecutionComplete:
 			// 顯示工具執行結果
 			success := event.Data.Success == nil || *event.Data.Success
 			if success {
+				if event.Data.Result != nil && event.Data.Result.Content != "" {
+					// 顯示結果（最多 20 行）
+					lines := strings.Split(strings.TrimSpace(event.Data.Result.Content), "\n")
+					limit := 20
+					for i, line := range lines {
+						if i >= limit {
+							fmt.Printf("  │ ... (共 %d 行)\n", len(lines))
+							break
+						}
+						fmt.Printf("  │ %s\n", line)
+					}
+				}
 				fmt.Printf("  └ 完成\n")
 			} else {
 				errMsg := ""
