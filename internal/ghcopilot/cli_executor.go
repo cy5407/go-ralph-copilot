@@ -419,7 +419,7 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 	// 捕獲輸出並同時顯示到終端
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = io.MultiWriter(&stdout, os.Stdout) // 同時寫入 buffer 和終端
-	cmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
+	cmd.Stderr = io.MultiWriter(&stderr, newFilteredWriter(os.Stderr))
 	cmd.Stdin = nil // 明確設定沒有輸入，防止卡在等待輸入
 
 	// 執行前日誌
@@ -650,6 +650,49 @@ func (ce *CLIExecutor) ValidateWorkDir() error {
 		return fmt.Errorf("工作目錄無效 %s: %w", workDir, err)
 	}
 	return nil
+}
+
+// filteredWriter 過濾 Copilot CLI 已知噪音行後再寫入底層 writer
+type filteredWriter struct {
+	w    io.Writer
+	buf  []byte
+}
+
+func newFilteredWriter(w io.Writer) *filteredWriter {
+	return &filteredWriter{w: w}
+}
+
+// noisePatterns 列出要過濾掉的噪音字串
+var noisePatterns = []string{
+	"error: unknown option '--no-warnings'",
+}
+
+func (fw *filteredWriter) Write(p []byte) (n int, err error) {
+	fw.buf = append(fw.buf, p...)
+	for {
+		idx := bytes.IndexByte(fw.buf, '\n')
+		if idx < 0 {
+			break
+		}
+		line := fw.buf[:idx+1]
+		fw.buf = fw.buf[idx+1:]
+		if !fw.isNoise(line) {
+			if _, werr := fw.w.Write(line); werr != nil {
+				return 0, werr
+			}
+		}
+	}
+	return len(p), nil
+}
+
+func (fw *filteredWriter) isNoise(line []byte) bool {
+	s := strings.TrimSpace(string(line))
+	for _, pat := range noisePatterns {
+		if strings.Contains(s, pat) {
+			return true
+		}
+	}
+	return false
 }
 
 // SetWorkDir 設定工作目錄
