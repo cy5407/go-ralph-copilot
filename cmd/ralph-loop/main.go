@@ -25,7 +25,6 @@ func main() {
 	runCLITimeout := runCmd.Duration("cli-timeout", 3*time.Minute, "單次 Copilot CLI 執行逾時（預設 3 分鐘）")
 	runWorkDir := runCmd.String("workdir", ".", "工作目錄")
 	runSilent := runCmd.Bool("silent", false, "靜默模式")
-	runNoSDK := runCmd.Bool("no-sdk", false, "強制使用 CLI 執行器，跳過 SDK（除錯用）")
 
 	statusCmd := flag.NewFlagSet("status", flag.ExitOnError)
 	statusWorkDir := statusCmd.String("workdir", ".", "工作目錄")
@@ -52,7 +51,7 @@ func main() {
 			runCmd.Usage()
 			os.Exit(1)
 		}
-		cmdRun(*runPrompt, *runMaxLoops, *runTimeout, *runCLITimeout, *runWorkDir, *runSilent, *runNoSDK)
+		cmdRun(*runPrompt, *runMaxLoops, *runTimeout, *runCLITimeout, *runWorkDir, *runSilent)
 
 	case "status":
 		// #nosec G104 -- FlagSet 使用 ExitOnError，Parse 失敗會自動 os.Exit(2)
@@ -113,7 +112,7 @@ func printUsage() {
 `, Version)
 }
 
-func cmdRun(prompt string, maxLoops int, timeout time.Duration, cliTimeout time.Duration, workDir string, silent bool, noSDK bool) {
+func cmdRun(prompt string, maxLoops int, timeout time.Duration, cliTimeout time.Duration, workDir string, silent bool) {
 	fmt.Println("========================================")
 	fmt.Println("  Ralph Loop - 自動程式碼迭代系統")
 	fmt.Println("========================================")
@@ -131,11 +130,6 @@ func cmdRun(prompt string, maxLoops int, timeout time.Duration, cliTimeout time.
 	config.CLIMaxRetries = 3
 	config.CircuitBreakerThreshold = 3
 	config.SameErrorThreshold = 5
-
-	if noSDK {
-		config.EnableSDK = false
-		config.PreferSDK = false
-	}
 
 	// 傳遞靜默模式給環境變數（供 infoLog 使用）
 	if silent {

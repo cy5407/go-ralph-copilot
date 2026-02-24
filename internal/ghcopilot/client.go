@@ -217,26 +217,22 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 		// Lazy-start：第一次呼叫時才啟動 SDK 執行器
 		if !c.sdkExecutor.isHealthy() {
 			if startErr := c.sdkExecutor.Start(ctx); startErr != nil {
-				infoLog("⚠️ SDK 執行器啟動失敗，降級使用 CLI 模式: %v", startErr)
+				log.Printf("⚠️ SDK 執行器啟動失敗，改用 CLI: %v", startErr)
 			}
 		}
 		if c.sdkExecutor.isHealthy() {
-			infoLog("📡 使用 SDK 模式執行")
 			output, executionErr = c.sdkExecutor.Complete(ctx, prompt)
 			if executionErr == nil {
 				usedSDK = true
 				execCtx.CLICommand = "sdk:complete"
 				execCtx.CLIOutput = output
 				execCtx.CLIExitCode = 0
-			} else {
-				infoLog("⚠️ SDK 執行失敗，降級使用 CLI 模式: %v", executionErr)
 			}
 		}
 	}
 
 	// SDK 失敗/不可用/未啟用，或配置不優先使用 SDK 時，使用 CLI
 	if !usedSDK {
-		infoLog("🔧 使用 CLI 模式執行")
 		result, err := c.executor.ExecutePrompt(ctx, prompt)
 		if err != nil {
 			// context.Canceled = 使用者中斷（Ctrl+C），立刻停止
