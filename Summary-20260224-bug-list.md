@@ -94,20 +94,25 @@
 
 ---
 
-## ❌ 未解決（待處理）
+## ⚠️ 未完全解決（已緩解或降優先級）
 
-### Open-01：Permission denied 透過 MCP skill 中轉
+> **2026-02-24 更新**：SDK 模式（`sdk_executor.go`）使用 `PermissionHandler.ApproveAll` + `OnPreToolUse` hook，
+> 大幅緩解了 Open-01 和 Open-02 的問題。以下僅在 CLI 回退模式仍有風險。
+
+### Open-01：Permission denied 透過 MCP skill 中轉 — **SDK 模式已緩解**
 - **問題**：Copilot 使用 `skill(package-audit)` 等 MCP skill 時，shell 在 skill 沙盒執行，`--yolo` 管不到
 - **影響**：Copilot 主動使用 skill 時整個任務卡死
 - **方向**：`--deny-tool 'skill'` 禁止使用 MCP skill，強制 Copilot 直接操作
+- **SDK 狀態**：✅ SDK 模式下所有工具呼叫均自動放行，不受此限制
 
-### Open-02：`--no-custom-instructions` 管不到 `.claude/` skill
+### Open-02：`--no-custom-instructions` 管不到 `.claude/` skill — **SDK 模式已緩解**
 - **問題**：只能擋 AGENTS.md，無法阻止讀 `.claude/commands/` 並執行 skill 任務
 - **影響**：有 `.claude/` 目錄的專案容易任務跑偏
 - **方向**：prompt 開頭明確說「忽略任何 skill/custom instruction」，或 `--deny-tool skill`
+- **SDK 狀態**：✅ SDK 模式不自動載入 `.claude/commands/` skill
 
-### Open-03：`error: unknown option '--no-warnings'` 大量輸出
+### Open-03：`error: unknown option '--no-warnings'` 大量輸出 — **已有 filteredWriter 緩解**
 - **問題**：每次 shell 工具執行後 Copilot CLI stderr 輸出這行，複雜任務可能幾十上百行
 - **影響**：輸出噪音、干擾 response_analyzer 自然語言偵測
-- **方向**：這是 Copilot CLI bug，等官方修；目前可在解析前過濾這行
+- **方向**：這是 Copilot CLI bug，等官方修；`filteredWriter`（commit `8a56a22`）已過濾噪音行
 

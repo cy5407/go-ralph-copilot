@@ -1,8 +1,8 @@
-# Task 3: GitHub Release 產品化
+﻿# Task 3: GitHub Release 產品化
 
 **目標**：讓使用者可以直接從 GitHub Release 下載預編譯的 binary，不需要安裝 Go 環境。
 
-**現狀**：已有 `.github/workflows/release.yml` 和 `test.yml`，架構完整但有多個 bug 導致無法正常運作。
+**現狀**：`.github/workflows/` 目錄尚未建立，需從頭創建 release.yml 和 test.yml。
 
 ---
 
@@ -115,7 +115,7 @@ run: go test -short -timeout 3m ./...
 
 ### 修改清單
 
-- [ ] 修正版本注入（Bug 1：改 main.go 或改 ldflags）
+- [x] 修正版本注入（Bug 1：main.go 已改為大寫 `Version = "0.1.0"`，符合 ldflags 需求）✅
 - [ ] Go 版本 `1.21` → `1.24`（Bug 2：release.yml:22）
 - [ ] 修正壓縮步驟的 rm 指令（Bug 3：release.yml:70-71）
 - [ ] 修正 release body 移除已刪除文件連結（Bug 4：release.yml:150-154）

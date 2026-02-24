@@ -1,4 +1,4 @@
-# Ralph Loop - 程式碼架構總結
+﻿# Ralph Loop - 程式碼架構總結
 
 ## 核心設計原則
 
@@ -80,6 +80,24 @@ type CopilotStatus struct {
 }
 ```
 
+## 核心模組位置
+
+| 模組 | 檔案 | 職責 |
+|------|------|------|
+| **RalphLoopClient** | `internal/ghcopilot/client.go` | 主要 API 入口點，整合所有模組 |
+| **SDKExecutor** | `internal/ghcopilot/sdk_executor.go` | GitHub Copilot SDK 執行器（主要） |
+| **CLIExecutor** | `internal/ghcopilot/cli_executor.go` | GitHub Copilot CLI 執行器（備用） |
+| **ExecutionModeSelector** | `internal/ghcopilot/execution_mode_selector.go` | 智能執行模式選擇與降級 |
+| **RetryExecutor** | `internal/ghcopilot/retry_strategy.go` | 重試機制（指數/線性/固定間隔） |
+| **CircuitBreaker** | `internal/ghcopilot/circuit_breaker.go` | 熔斷器保護（三狀態模式） |
+| **ResponseAnalyzer** | `internal/ghcopilot/response_analyzer.go` | 完成判斷與卡住偵測 |
+| **ContextManager** | `internal/ghcopilot/context.go` | 上下文與歷史管理 |
+| **PersistenceManager** | `internal/ghcopilot/persistence.go` | 狀態保存/載入（JSON/Gob） |
+| **SDKSessionPool** | `internal/ghcopilot/sdk_session.go` | SDK 會話生命週期管理 |
+| **ExitDetector** | `internal/ghcopilot/exit_detector.go` | 退出訊號追蹤（完成計數/測試飽和/速率限制） |
+| **FailureDetector** | `internal/ghcopilot/failure_detector.go` | 故障類型偵測（逾時/錯誤率/連接） |
+| **RecoveryStrategy** | `internal/ghcopilot/recovery_strategy.go` | 故障恢復策略（自動重連/故障轉移） |
+| **DependencyChecker** | `internal/ghcopilot/dependency_checker.go` | 依賴項可用性檢查 |
 ## 模組互動流程
 
 ```

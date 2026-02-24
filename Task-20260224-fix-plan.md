@@ -96,7 +96,11 @@ Try 'copilot --help' for more information.
 
 ---
 
-## ❌ Open-01：Permission denied 透過 MCP skill 中轉（待修復）
+## ⚠️ Open-01：Permission denied 透過 MCP skill 中轉（SDK 模式已緩解）
+
+> **2026-02-24 更新**：SDK 模式使用 `PermissionHandler.ApproveAll` + `OnPreToolUse` hook，
+> 所有工具呼叫（含 MCP）均自動放行，此問題在 SDK 模式下已不存在。
+> CLI 回退模式仍有此風險，方案 A 保留作為 CLI 層修復參考。
 
 ### 現象
 - Copilot 使用 `skill(package-audit)` 等 MCP skill 時，shell 在 skill 沙盒執行
@@ -144,7 +148,10 @@ args = append(args, "--excluded-tools", "skill")
 
 ---
 
-## ❌ Open-02：`--no-custom-instructions` 管不到 `.claude/` skill（待修復）
+## ⚠️ Open-02：`--no-custom-instructions` 管不到 `.claude/` skill（CLI 模式仍有風險）
+
+> **2026-02-24 更新**：SDK 模式不會自動載入 `.claude/commands/` skill，
+> 此問題主要影響 CLI 回退模式。Prompt 防禦注入（Layer 2）已部分實施於 `ralphStatusSuffix`。
 
 ### 現象
 - `--no-custom-instructions` 只阻擋 AGENTS.md / CLAUDE.md 等指令檔
@@ -196,7 +203,7 @@ args = append(args, "--excluded-tools", "skill")
 
 ---
 
-## ❌ Open-03：`error: unknown option '--no-warnings'` 大量輸出（已緩解，待官方修復）
+## ⚠️ Open-03：`error: unknown option '--no-warnings'` 大量輸出（已緩解，待官方修復）
 
 ### 現象
 - 每次 shell 工具執行後 Copilot CLI stderr 輸出這行
@@ -234,12 +241,13 @@ cmd.Env = append(env, envVars...)
 
 ## 🆕 發現的其他問題
 
-### Issue-A：`ioutil` 已棄用
+### ✅ Issue-A：`ioutil` 已棄用（已修復）
 
 - `circuit_breaker.go` 和 `exit_detector.go` 使用了 `io/ioutil`
 - `ioutil.ReadFile` / `ioutil.WriteFile` 在 Go 1.16+ 已棄用
 - 應改用 `os.ReadFile` / `os.WriteFile`
 - **影響**：無功能性影響，但編譯器警告，且不符合 Go 1.24.5 最佳實踐
+- **已修復**：commit `1271d02`，所有 `ioutil` 呼叫已替換為 `os` 套件
 
 ### Issue-B：`ExecuteUntilCompletion` 每次迴圈重複注入 ralphStatusInstruction
 
@@ -268,13 +276,13 @@ cmd.Env = append(env, envVars...)
 | ✅ | P0 | Bug 2: `--no-custom-instructions` 防止任務跑偏 | `97d1e04` |
 | ✅ | P1 | Bug 3: `filteredWriter` 過濾 stderr 噪音 | `8a56a22` |
 
-### 待執行
+### 待執行（2026-02-24 更新）
 
-| 優先 | 項目 | 檔案 | 說明 |
-|------|------|------|------|
-| P0 | Open-01 修復 | `cli_executor.go` | 新增 `DisableBuiltinMCPs` 選項，buildArgs() 加入 `--disable-builtin-mcps` |
-| P0 | Open-02 修復 | `client.go` | ralphStatusInstruction 加入「禁止使用 skill」指令 |
-| P1 | Open-03 加強 | `cli_executor.go` | 清除 `NODE_OPTIONS` 環境變數 |
-| P2 | Issue-C 修復 | `cli_executor.go` | `ResumeSession`/`ContinueLastSession` 改走 `buildArgs()` 流程 |
-| P3 | Issue-A 清理 | `circuit_breaker.go`, `exit_detector.go` | `ioutil` → `os.ReadFile`/`os.WriteFile` |
-| P3 | 驗證 | 整合測試 | 在含 `.claude/commands/` 的專案中驗證所有修復 |
+| 優先 | 項目 | 檔案 | 說明 | 狀態 |
+|------|------|------|------|------|
+| P1 | Open-01 CLI 層修復 | `cli_executor.go` | 新增 `DisableBuiltinMCPs` 選項（SDK 模式已緩解） | ⚠️ 僅 CLI 回退需要 |
+| P1 | Open-02 CLI 層修復 | `client.go` | ralphStatusInstruction 加入「禁止使用 skill」指令（SDK 模式已緩解） | ⚠️ 僅 CLI 回退需要 |
+| P2 | Open-03 加強 | `cli_executor.go` | 清除 `NODE_OPTIONS` 環境變數 | ⏳ 等待官方修復 |
+| P2 | Issue-C 修復 | `cli_executor.go` | `ResumeSession`/`ContinueLastSession` 改走 `buildArgs()` 流程 | ⏳ |
+| ~~P3~~ | ~~Issue-A 清理~~ | ~~`circuit_breaker.go`, `exit_detector.go`~~ | ~~`ioutil` → `os.ReadFile`/`os.WriteFile`~~ | ✅ commit `1271d02` |
+| P3 | 驗證 | 整合測試 | 在含 `.claude/commands/` 的專案中驗證所有修復 | ⏳ |

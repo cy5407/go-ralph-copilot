@@ -1,4 +1,4 @@
-# Ralph Loop 下一步待辦事項
+﻿# Ralph Loop 下一步待辦事項
 
 **更新日期**: 2026-02-24  
 **當前版本**: v0.1.0-stable（SDK v0.1.26）
@@ -30,6 +30,7 @@
 
 **目標**: 自動化測試與發布流程，詳見 `task3.md`（T3-001 ~ T3-005 全部未完成）
 
+> **注意**: workflows 目錄尚未建立，需創建 `.github/workflows/` 目錄並從頭撰寫這兩個檔案。
 - [ ] `.github/workflows/test.yml`（每次 push 執行 `go test ./...`）
 - [ ] `.github/workflows/release.yml`（tag push 時自動建置多平台 binary）
 

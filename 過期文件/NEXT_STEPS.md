@@ -123,42 +123,40 @@
 
 ---
 
-### 4. 實作 Promise Detection (P2 - 低優先級)
+### 4. ~~實作 Promise Detection~~ (暫緩 - Deferred)
 
-**目標**: 改進完成檢測機制（task2.md 提到但未在當前版本實作）
+> **2026-02-24 狀態更新**：SDK 模式下 `RALPH_STATUS` 遵從率已大幅提升，
+> 現有三層防禦機制（EXIT_SIGNAL 單獨足夠 + 自然語言備用 + CRLF 容錯）足以運作。
+> 本項保留作為 CLI 回退模式的備用方案，待實際遇到問題時再重新評估。
+> 詳見 `Task-20260224-fix-Promise-Detection.md`。
 
-**背景**: 當前版本使用舊版完成檢測機制，依賴關鍵字匹配
+~~**目標**: 改進完成檢測機制（task2.md 提到但未在當前版本實作）~~
 
-**改進方向**:
-- [ ] 研究 Promise Detection 機制設計
-- [ ] 實作結構化退出信號 `<promise>任務完成！🥇</promise>`
-- [ ] 整合到 `ResponseAnalyzer`
-- [ ] 新增單元測試驗證
-- [ ] 更新 ARCHITECTURE.md 文檔
+**改進方向**（暫緩）:
+- [ ] ~~研究 Promise Detection 機制設計~~
+- [ ] ~~實作結構化退出信號 `<promise>任務完成！🥇</promise>`~~
+- [ ] ~~整合到 `ResponseAnalyzer`~~
+- [ ] ~~新增單元測試驗證~~
+- [ ] ~~更新 ARCHITECTURE.md 文檔~~
 
-**參考**: 
+**參考**:
 - `internal/ghcopilot/response_analyzer.go`
 - commit `d2c8ec1` (Promise Detection 原始實作，但造成問題已回退)
 
 ---
 
-### 5. SDK 版本升級 (P2 - 低優先級)
+### 5. ~~SDK 版本升級~~ ✅ 已完成
 
-**目標**: 遷移到新版 GitHub Copilot SDK（task2.md T2-019）
+> **2026-02-24 狀態更新**：SDK 已升級至 `github.com/github/copilot-sdk/go v0.1.26`，
+> `sdk_executor.go` 已完成整合，支援 lazy-start、事件串流、自動權限放行。
+> SDK 為主要執行方式，CLI 為回退方案。
 
-**當前狀態**: 
-- SDK executor 已實作但因版本不兼容無法使用
-- 使用舊版 SDK: `github.com/cy5407/copilot-cli-agent-go v0.1.15-preview.0`
-
-**升級計劃**:
-- [ ] 研究新版 SDK: `github.com/github/copilot-cli-sdk-go`
-- [ ] 檢查 API 變更與遷移需求
-- [ ] 更新 `go.mod` 依賴
-- [ ] 修改 `sdk_executor.go` 適配新 API
-- [ ] 更新所有相關測試
-- [ ] 驗證 SDK/CLI 混合執行器正常工作
-
-**風險**: 可能需要大量程式碼修改，建議在新分支開發
+**已完成項目**:
+- [x] 研究新版 SDK API
+- [x] 更新 `go.mod` 依賴至 v0.1.26
+- [x] 修改 `sdk_executor.go` 適配新 API（`PermissionHandler.ApproveAll`、`SendAndWait`、事件串流）
+- [x] 實作 SDK lazy-start + CLI 回退機制
+- [x] 驗證 SDK/CLI 混合執行正常工作
 
 ---
 
@@ -252,5 +250,5 @@
 
 ---
 
-**最後更新**: 2026-02-14  
+**最後更新**: 2026-02-24
 **維護者**: [@cy5407](https://github.com/cy5407)

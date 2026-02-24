@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -110,8 +110,10 @@ COPILOT_MOCK_MODE=true ./ralph-loop.exe run -prompt "測試" -max-loops 3
 - `circuit_breaker.go` - 防止無限迴圈的安全機制
 - `context.go` - 管理迴圈歷史與上下文累積
 - `persistence.go` - 儲存/載入執行記錄
-- `exit_detector.go` - 優雅退出決策（EXIT_SIGNAL 單獨就夠，備用 score ≥ 30）
-- `cli_executor.go` - GitHub Copilot CLI 執行器（SDK 失敗時回退）
+- `exit_detector.go` - 優雅退出訊號追蹤（完成計數/done信號/測試飽和/速率限制）
+- `failure_detector.go` - 故障類型偵測（逾時/錯誤率/連接/健康檢查）
+- `recovery_strategy.go` - 故障恢復策略（自動重連/會話恢復/故障轉移）
+- `dependency_checker.go` - 依賴項可用性檢查
 
 **`cmd/ralph-loop/main.go`** - CLI 入口
 
@@ -123,7 +125,7 @@ COPILOT_MOCK_MODE=true ./ralph-loop.exe run -prompt "測試" -max-loops 3
 
 ```go
 config := ghcopilot.DefaultClientConfig()
-config.CLITimeout = 60 * time.Second      // Copilot 單次執行超時
+config.CLITimeout = 3 * time.Minute       // Copilot 單次執行超時（預設 3 分鐘）
 config.CLIMaxRetries = 3                  // 失敗重試次數
 config.CircuitBreakerThreshold = 3        // 無進展迴圈數觸發熔斷
 config.SameErrorThreshold = 5             // 相同錯誤次數觸發熔斷
@@ -139,7 +141,7 @@ opts := ghcopilot.DefaultOptions()
 opts.Model = ghcopilot.ModelClaudeSonnet45
 opts.Silent = true              // 靜默模式（減少輸出）
 opts.AllowAllTools = true       // 允許 Copilot 使用所有工具
-opts.NoAskUser = true           // 自主模式（不詢問使用者）
+// opts.NoAskUser 已移除：與 --yolo 衝突，--no-ask-user 會讓 Edit 工具直接拒絕
 ```
 
 ## 完成檢測機制
