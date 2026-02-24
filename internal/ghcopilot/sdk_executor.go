@@ -12,6 +12,7 @@ import (
 // SDKConfig SDK 執行器配置
 type SDKConfig struct {
 	CLIPath        string        // CLI 路徑
+	WorkDir        string        // 工作目錄
 	Timeout        time.Duration // 執行逾時
 	SessionTimeout time.Duration // 會話逾時
 	MaxSessions    int           // 最大會話數
@@ -88,6 +89,9 @@ func (e *SDKExecutor) Start(ctx context.Context) error {
 		CLIPath:  e.config.CLIPath,
 		LogLevel: e.config.LogLevel,
 	}
+	if e.config.WorkDir != "" {
+		clientOpts.Cwd = e.config.WorkDir
+	}
 
 	e.client = copilot.NewClient(clientOpts)
 	if e.client == nil {
@@ -96,7 +100,7 @@ func (e *SDKExecutor) Start(ctx context.Context) error {
 	}
 
 	// 啟動客戶端
-	if err := e.client.Start(); err != nil {
+	if err := e.client.Start(ctx); err != nil {
 		e.lastError = fmt.Errorf("failed to start copilot client: %w", err)
 		return e.lastError
 	}
@@ -126,9 +130,8 @@ func (e *SDKExecutor) Stop(ctx context.Context) error {
 
 	// 停止客戶端
 	if e.client != nil {
-		clientErrs := e.client.Stop()
-		if len(clientErrs) > 0 {
-			e.lastError = fmt.Errorf("停止客戶端時發生錯誤: %v", clientErrs)
+		if err := e.client.Stop(); err != nil {
+			e.lastError = fmt.Errorf("停止客戶端時發生錯誤: %v", err)
 			errs = append(errs, e.lastError)
 			fmt.Printf("⚠️ %v\n", e.lastError)
 		}
@@ -151,7 +154,7 @@ func (e *SDKExecutor) Stop(ctx context.Context) error {
 	return nil
 }
 
-// Complete 執行代碼完成
+// Complete 執行 AI 任務（使用新版 SDK session API）
 func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, error) {
 	if !e.isHealthy() {
 		return "", fmt.Errorf("sdk executor not healthy")
@@ -160,10 +163,43 @@ func (e *SDKExecutor) Complete(ctx context.Context, prompt string) (string, erro
 	startTime := time.Now()
 	e.metrics.TotalCalls++
 
-	// 執行完成 (這裡使用模擬，因為實際 SDK 方法可能不同)
-	result := fmt.Sprintf("Completion for: %s", prompt)
-	duration := time.Since(startTime)
+	// 建立會話，自動允許所有工具呼叫
+	session, err := e.client.CreateSession(ctx, &copilot.SessionConfig{
+		Hooks: &copilot.SessionHooks{
+			// 自動允許所有工具（解決 Permission denied 問題）
+			OnPreToolUse: func(input copilot.PreToolUseHookInput, inv copilot.HookInvocation) (*copilot.PreToolUseHookOutput, error) {
+				return &copilot.PreToolUseHookOutput{
+					PermissionDecision: "allow",
+				}, nil
+			},
+		},
+		OnUserInputRequest: func(req copilot.UserInputRequest, inv copilot.UserInputInvocation) (copilot.UserInputResponse, error) {
+			// 自動回答用戶輸入請求
+			if len(req.Choices) > 0 {
+				return copilot.UserInputResponse{Answer: req.Choices[0], WasFreeform: false}, nil
+			}
+			return copilot.UserInputResponse{Answer: "yes", WasFreeform: true}, nil
+		},
+	})
+	if err != nil {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("failed to create sdk session: %w", err)
+	}
+	defer session.Destroy()
 
+	// 傳送訊息並等待完成
+	event, err := session.SendAndWait(ctx, copilot.MessageOptions{Prompt: prompt})
+	if err != nil {
+		e.metrics.FailedCalls++
+		return "", fmt.Errorf("sdk execute failed: %w", err)
+	}
+
+	var result string
+	if event != nil && event.Data.Content != nil {
+		result = *event.Data.Content
+	}
+
+	duration := time.Since(startTime)
 	e.metrics.SuccessfulCalls++
 	e.metrics.TotalDuration += duration
 
@@ -319,9 +355,8 @@ func (e *SDKExecutor) Close() error {
 
 	// 停止客戶端
 	if e.client != nil && e.running {
-		errs := e.client.Stop()
-		if len(errs) > 0 {
-			e.lastError = fmt.Errorf("errors during close: %v", errs)
+		if err := e.client.Stop(); err != nil {
+			e.lastError = fmt.Errorf("errors during close: %v", err)
 		}
 	}
 

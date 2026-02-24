@@ -118,6 +118,7 @@ func NewRalphLoopClientWithConfig(config *ClientConfig) *RalphLoopClient {
 	// 初始化 SDK 執行器
 	sdkConfig := &SDKConfig{
 		CLIPath:        "copilot",
+		WorkDir:        config.WorkDir,
 		Timeout:        config.CLITimeout,
 		SessionTimeout: 5 * time.Minute,
 		MaxSessions:    100,
@@ -162,17 +163,15 @@ func DefaultClientConfig() *ClientConfig {
 // 返回值：
 // - LoopResult: 迴圈執行結果
 // - error: 執行過程中的錯誤
-// ralphStatusInstruction 是自動插入到每個 prompt 開頭的結構化輸出要求
-// 放在開頭確保 Copilot 第一個讀到，不會被 skill 格式覆蓋
-const ralphStatusInstruction = `【系統要求】完成任務後，回應最後必須輸出以下格式，否則系統無法偵測完成狀態：
+// ralphStatusSuffix 放在使用者 prompt 後面，避免 Copilot 把格式說明當主要內容
+const ralphStatusSuffix = `
+
+完成後請在回應最後輸出：
 ---RALPH_STATUS---
 EXIT_SIGNAL: true
 REASON: <完成原因>
 ---END_RALPH_STATUS---
-若任務尚未完成，輸出 EXIT_SIGNAL: false。
-
-【任務】
-`
+若尚未完成則輸出 EXIT_SIGNAL: false。`
 
 func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*LoopResult, error) {
 	if !c.initialized {
@@ -182,8 +181,8 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 		return nil, fmt.Errorf("client is closed")
 	}
 
-	// 把格式要求放在 prompt 前面（系統要求優先）
-	prompt = ralphStatusInstruction + prompt
+	// 使用者 prompt 放前面（主要內容），格式要求放後面（附註）
+	prompt = prompt + ralphStatusSuffix
 
 	// 檢查熔斷器
 	if c.breaker.IsOpen() {
@@ -213,14 +212,22 @@ func (c *RalphLoopClient) ExecuteLoop(ctx context.Context, prompt string) (*Loop
 	var executionErr error
 	var usedSDK bool
 
-	// 如果配置優先使用 SDK，則先嘗試 SDK
-	if c.config.PreferSDK && c.config.EnableSDK && c.sdkExecutor != nil && c.sdkExecutor.isHealthy() {
-		output, executionErr = c.sdkExecutor.Complete(ctx, prompt)
-		if executionErr == nil {
-			usedSDK = true
-			execCtx.CLICommand = "sdk:complete"
-			execCtx.CLIOutput = output
-			execCtx.CLIExitCode = 0
+	// 如果配置優先使用 SDK，嘗試啟動並使用 SDK
+	if c.config.PreferSDK && c.config.EnableSDK && c.sdkExecutor != nil {
+		// Lazy-start：第一次呼叫時才啟動 SDK 執行器
+		if !c.sdkExecutor.isHealthy() {
+			if startErr := c.sdkExecutor.Start(ctx); startErr != nil {
+				log.Printf("⚠️ SDK 執行器啟動失敗，改用 CLI: %v", startErr)
+			}
+		}
+		if c.sdkExecutor.isHealthy() {
+			output, executionErr = c.sdkExecutor.Complete(ctx, prompt)
+			if executionErr == nil {
+				usedSDK = true
+				execCtx.CLICommand = "sdk:complete"
+				execCtx.CLIOutput = output
+				execCtx.CLIExitCode = 0
+			}
 		}
 	}
 
