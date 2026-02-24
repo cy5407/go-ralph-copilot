@@ -146,8 +146,8 @@ func DefaultClientConfig() *ClientConfig {
 		Model:                   "claude-sonnet-4.5",
 		Silent:                  false,
 		EnablePersistence:       true,
-		EnableSDK:               true, // 預設啟用 SDK（主要執行方式）
-		PreferSDK:               true, // 預設優先使用 SDK
+		EnableSDK:               false, // SDK 需要 embeddedcli.Setup()，目前不支援
+		PreferSDK:               false, // 預設使用 CLI 路徑（穩定可用）
 	}
 }
 
