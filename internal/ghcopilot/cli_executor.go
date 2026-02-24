@@ -446,13 +446,28 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 
 	infoLog("⏳ 執行 Copilot CLI (超時: %v)...", ce.timeout)
 
-	// 執行指令
-	err := cmd.Run()
-
-	// Windows 上確保子進程也被殺掉（timeout 時）
-	if execCtx.Err() != nil && cmd.Process != nil {
-		killProcessTree(cmd.Process.Pid)
+	// 啟動進程
+	if startErr := cmd.Start(); startErr != nil {
+		return nil, startErr
 	}
+
+	// 背景監控 context cancel，主動殺掉整個 process tree
+	// 必須在 cmd.Wait() 前啟動，否則子進程持有 pipe 導致 cmd.Wait() 永遠不返回
+	processDone := make(chan struct{})
+	go func() {
+		select {
+		case <-execCtx.Done():
+			// context 取消（Ctrl+C 或超時）→ 強制殺掉整個 process tree
+			if cmd.Process != nil {
+				killProcessTree(cmd.Process.Pid)
+			}
+		case <-processDone:
+			// 進程已正常結束，goroutine 退出
+		}
+	}()
+
+	err := cmd.Wait()
+	close(processDone) // 通知監控 goroutine 進程已結束，避免 goroutine 洩漏
 
 	executionTime := time.Since(start)
 
