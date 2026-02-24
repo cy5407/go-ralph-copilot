@@ -15,7 +15,21 @@
       "Bash(find:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:docs.github.com)",
+      "Bash(go build:*)",
+      "Bash(where:*)",
+      "Bash(cmd /c \"where go 2>nul || echo not found\")",
+      "Bash(cmd /c:*)",
+      "Bash(powershell -Command \"& 'C:\\\\Program Files\\\\Go\\\\bin\\\\go.exe' build ./... 2>&1\":*)",
+      "Bash(powershell -Command \"& 'C:\\\\Program Files\\\\Go\\\\bin\\\\go.exe' test ./... 2>&1\":*)",
+      "Bash(powershell -Command \"cd 'C:\\\\Users\\\\yutachang\\\\Desktop\\\\程式碼\\\\go-ralph-copilot'; & 'C:\\\\Program Files\\\\Go\\\\bin\\\\go.exe' build -o ralph-loop.exe ./cmd/ralph-loop 2>&1\":*)",
+      "Bash(powershell -Command \"$env:RALPH_DEBUG=''1''; cd ''C:\\\\Users\\\\yutachang\\\\Desktop\\\\程式碼\\\\go-ralph-copilot''; .\\\\ralph-loop.exe run -prompt ''echo hello test'' -max-loops 1 -cli-timeout 60s -timeout 2m 2>&1\")",
+      "Bash(powershell -Command \"cd ''C:\\\\Users\\\\yutachang\\\\Desktop\\\\程式碼\\\\go-ralph-copilot''; .\\\\ralph-loop.exe run -prompt ''執行 git status 確認是否有需要 git push 的內容'' -max-loops 2 -cli-timeout 90s -timeout 3m 2>&1\")",
+      "Bash(powershell -Command:*)",
+      "Bash(gh api:*)",
+      "Bash(python3:*)"
     ]
   }
 }
