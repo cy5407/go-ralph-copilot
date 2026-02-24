@@ -397,6 +397,10 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 	cmd := exec.CommandContext(execCtx, "copilot", args...)
 	cmd.Dir = ce.workDir
 
+	// Windows 上需要設定 SysProcAttr 讓子進程也可以被 kill
+	// 避免 Copilot 啟動的子進程在 timeout 後繼續跑
+	setSysProcAttr(cmd)
+
 	// 設定環境變數
 	envVars := []string{
 		fmt.Sprintf("REQUEST_ID=%s", ce.requestID),
@@ -444,6 +448,12 @@ func (ce *CLIExecutor) execute(ctx context.Context, args []string) (*ExecutionRe
 
 	// 執行指令
 	err := cmd.Run()
+
+	// Windows 上確保子進程也被殺掉（timeout 時）
+	if execCtx.Err() != nil && cmd.Process != nil {
+		killProcessTree(cmd.Process.Pid)
+	}
+
 	executionTime := time.Since(start)
 
 	// 檢查是否超時
