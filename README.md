@@ -4,7 +4,8 @@
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> 基於 GitHub Copilot SDK 的自主程式碼修正與迭代工具 (這是我用Vibe coding 出來的AI小垃圾)
+> 在看到保哥於群組說他用SDK建立了像是Ralph的工具後，基於 GitHub Copilot SDK 的自主程式碼修正與迭代工具，並於後續在維護及產品實用化的過程中，參考了非常多保哥的設計，如果保哥希望我下架，我會盡快處理。
+ (這是我用Vibe coding 出來的AI垃圾，主要是我想用Go來建立這個工具)
 
 ## 📦 穩定版本
 
@@ -33,6 +34,10 @@ Ralph Loop 是一個參考了Ralph-Loop，想拿來在Copilot上仿造的 AI 驅
 
 本專案受到以下專案的啟發並參考：
 - [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) - Ralph Loop 的原始概念與設計思想
+- [copilot-ralph](https://github.com/doggy8088/copilot-ralph) - Will 保哥以 TypeScript/Node.js 實作的 GitHub Copilot 版 Ralph Loop，本專案在以下概念上高度參考此作：
+  - **結構化完成信號設計**：保哥的 `<promise>phrase</promise>` 精確字串偵測機制，啟發本專案以 `EXIT_SIGNAL: true` 嵌入 `---RALPH_STATUS---` 區塊的同等設計哲學——都是讓 AI 在輸出中嵌入特殊標記來明確表達任務已完成，避免誤判，因實測許多方法，無法有效的進行暫停/繼續迴圈的邏輯判斷，參考了保哥專案的信號設計。
+  - **Copilot SDK 事件串流架構**：兩者都迭代 `TextEvent` / `ToolCallEvent` / `ToolResultEvent` 事件流，並在終端機即時顯示工具執行過程；保哥的 `LoopEngine.executeIteration()` 事件處理邏輯與本專案的 SDK executor 事件迭代在結構上高度一致。
+  - **LoopConfig 核心欄位設計**：`maxIterations`、`timeoutMs`、`model`、`workingDir`、`promisePhrase` 這些欄位並非 GitHub Copilot SDK 本身定義的欄位，而是保哥在 `copilot-ralph` 的 `LoopConfig` 介面中自行設計的命名語意；本專案的 `ClientConfig` 直接沿用了相同的欄位命名與概念。
 - 採用 **Vibe Coding** 開發方法論 - 以 AI 輔助的快速迭代開發流程
 
 ### 核心技術
@@ -321,6 +326,7 @@ MIT License
 ## 🙏 致謝
 
 - [ralph-claude-code](https://github.com/frankbria/ralph-claude-code) - 原始靈感與概念設計
+- [copilot-ralph](https://github.com/doggy8088/copilot-ralph) (Will 保哥) - 結構化完成信號設計哲學、Copilot SDK 事件串流架構、LoopConfig 核心欄位語意，均為本專案的重要參考來源
 - GitHub Copilot Team - 提供強大的 AI SDK
 - Vibe Coding 社群 - 創新的開發方法論
 
